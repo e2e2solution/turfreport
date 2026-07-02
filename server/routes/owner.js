@@ -43,11 +43,15 @@ router.post('/push', authMiddleware, async (req, res) => {
   const snapshot = buildOwnerReportSnapshot(date);
   saveOwnerReport(snapshot);
 
-  const mongo = await syncReportToMongo(snapshot);
+  let mongo = { ok: false };
   let cloud = { ok: false };
 
-  if (!mongo.ok && process.env.CLOUD_SYNC_URL) {
+  // Prefer cloud sync when staff PC cannot reach MongoDB directly
+  if (process.env.CLOUD_SYNC_URL) {
     cloud = await pushReportToCloud(snapshot);
+  }
+  if (!cloud.ok) {
+    mongo = await syncReportToMongo(snapshot);
   }
 
   const synced = mongo.ok || cloud.ok;

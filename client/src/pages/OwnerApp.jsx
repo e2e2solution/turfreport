@@ -201,7 +201,10 @@ export default function OwnerApp({ standalone = false, native = false }) {
       {error && <p className="alert error owner-pad">{error}</p>}
 
       {!loading && reports.length === 0 && (
-        <p className="muted owner-pad">No reports yet. Staff must press &quot;Send Report to Owner&quot; from the app.</p>
+        <p className="muted owner-pad">
+          No reports yet. Staff must press &quot;Send Report to Owner&quot; from the staff app on PC.
+          {' '}Also check Render MongoDB is connected (health should show mongo: true).
+        </p>
       )}
 
       {reports.length > 0 && report && (
