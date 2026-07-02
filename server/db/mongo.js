@@ -22,7 +22,7 @@ export async function connectMongo() {
     if (client) {
       try { await client.close(); } catch { /* ignore */ }
     }
-    client = new MongoClient(uri);
+    client = new MongoClient(uri, { serverSelectionTimeoutMS: 8000 });
     await client.connect();
     db = client.db(process.env.MONGODB_DB || 'vsh_owner');
     lastError = '';

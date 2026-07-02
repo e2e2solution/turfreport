@@ -61,23 +61,25 @@ if (isProd) {
   });
 }
 
-connectMongo().finally(() => {
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server running on http://localhost:${PORT}${isProd ? ' (production)' : ''}`);
-    if (isProd) {
-      console.log('Owner mobile app:', `http://localhost:${PORT}/owner.html`);
-    }
-    if (!isProd) {
-      try {
-        const result = runBackups();
-        if (result.daily || result.weekly) {
-          console.log('Backup folder:', 'server/backups/');
-        } else {
-          console.log('Backups up to date for today');
-        }
-      } catch (err) {
-        console.error('Startup backup failed:', err.message);
+connectMongo().catch((err) => {
+  console.error('MongoDB background connect failed:', err.message);
+});
+
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Server running on http://localhost:${PORT}${isProd ? ' (production)' : ''}`);
+  if (isProd) {
+    console.log('Owner mobile app:', `http://localhost:${PORT}/owner.html`);
+  }
+  if (!isProd) {
+    try {
+      const result = runBackups();
+      if (result.daily || result.weekly) {
+        console.log('Backup folder:', 'server/backups/');
+      } else {
+        console.log('Backups up to date for today');
       }
+    } catch (err) {
+      console.error('Startup backup failed:', err.message);
     }
-  });
+  }
 });
