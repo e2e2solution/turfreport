@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="96" fill="#1a472a"/>
+  <circle cx="256" cy="200" r="72" fill="#92d050"/>
+  <path d="M128 380 Q256 300 384 380 L384 420 L128 420 Z" fill="#ffffff"/>
+  <text x="256" y="470" text-anchor="middle" font-family="Arial,sans-serif" font-size="48" font-weight="bold" fill="#92d050">VSH</text>
+</svg>

@@ -1,0 +1,37 @@
+import { NavLink } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+
+const links = [
+  { to: '/', label: 'Home', icon: '🏠' },
+  { to: '/add', label: 'Add', icon: '➕' },
+  { to: '/bookings', label: 'Records', icon: '📋' },
+  { to: '/summary', label: 'Summary', icon: '📈' },
+  { to: '/report', label: 'Report', icon: '📊' },
+];
+
+export default function Layout({ children }) {
+  const { user, logout } = useAuth();
+
+  return (
+    <div className="app">
+      <header className="header">
+        <div className="header-row">
+          <h1>Vathiyayath Sports Hub</h1>
+          <button type="button" className="btn-logout" onClick={logout} title="Logout">
+            Logout
+          </button>
+        </div>
+        {user && <p className="header-user">Hi, {user.username}</p>}
+      </header>
+      <main className="main">{children}</main>
+      <nav className="bottom-nav">
+        {links.map((l) => (
+          <NavLink key={l.to} to={l.to} className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}>
+            <span className="nav-icon">{l.icon}</span>
+            <span className="nav-label">{l.label}</span>
+          </NavLink>
+        ))}
+      </nav>
+    </div>
+  );
+}

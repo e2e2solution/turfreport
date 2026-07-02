@@ -1,0 +1,25 @@
+{
+  "name": "VSH Owner Reports",
+  "short_name": "VSH Owner",
+  "description": "Daily collection and turf hours — Vathiyayath Sports Hub",
+  "start_url": "/owner.html",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f4f6f8",
+  "theme_color": "#1a472a",
+  "icons": [
+    {
+      "src": "/icons/owner-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/owner-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}

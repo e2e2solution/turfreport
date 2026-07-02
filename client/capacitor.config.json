@@ -1,0 +1,11 @@
+{
+  "appId": "com.vshub.owner",
+  "appName": "VSH Owner",
+  "webDir": "dist-owner",
+  "server": {
+    "androidScheme": "https"
+  },
+  "android": {
+    "allowMixedContent": false
+  }
+}

@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: vsh-sports-hub
+    runtime: node
+    plan: free
+    buildCommand: npm run install:all && npm run build
+    startCommand: NODE_ENV=production npm start --prefix server
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: JWT_SECRET
+        generateValue: true
+      - key: AUTH_USERNAME
+        sync: false
+      - key: AUTH_PASSWORD
+        sync: false
+      - key: MONGODB_URI
+        sync: false
+      - key: MONGODB_DB
+        value: vsh_owner
+      - key: OWNER_PIN
+        sync: false
+      - key: OWNER_SYNC_KEY
+        generateValue: true
