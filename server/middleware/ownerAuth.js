@@ -1,7 +1,7 @@
 import jwt from 'jsonwebtoken';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'vathiyayath-sports-hub-secret';
-const OWNER_PIN = process.env.OWNER_PIN || 'owner123';
+const OWNER_PIN = process.env.OWNER_PIN || '123';
 
 export function verifyOwnerPin(pin) {
   const entered = String(pin ?? '').trim();

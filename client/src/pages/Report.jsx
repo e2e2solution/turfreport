@@ -304,7 +304,7 @@ export default function Report() {
         {ownerPushSuccess && (
           <div className="alert success owner-push-success">{ownerPushSuccess}</div>
         )}
-        <p className="hint">Owner installs mobile app from cloud URL → <strong>/owner.html</strong> (PIN: owner123)</p>
+        <p className="hint">Owner installs mobile app from cloud URL → <strong>/owner.html</strong> (PIN: 123)</p>
 
         <div className="daily-bulk-add">
           <h4>Add Bulk to This Day</h4>

@@ -89,7 +89,7 @@ function OwnerLogin({ onSuccess, standalone, native }) {
                 type="url"
                 value={serverUrl}
                 onChange={(e) => setServerUrl(e.target.value)}
-                placeholder="https://your-app.onrender.com"
+                placeholder="https://turfreport.onrender.com"
                 autoComplete="off"
                 required
               />
@@ -102,11 +102,11 @@ function OwnerLogin({ onSuccess, standalone, native }) {
               inputMode="numeric"
               value={pin}
               onChange={(e) => setPin(e.target.value)}
-              placeholder="Default: owner123"
+              placeholder="PIN: 123"
               autoComplete="off"
             />
           </label>
-          <p className="hint" style={{ marginTop: 8 }}>Default PIN is <strong>owner123</strong> unless changed in server .env</p>
+          <p className="hint" style={{ marginTop: 8 }}>Owner PIN is set in server .env (<strong>OWNER_PIN</strong>)</p>
           <button type="submit" className="btn primary owner-btn" disabled={loading}>
             {loading ? 'Signing in...' : 'View Reports'}
           </button>

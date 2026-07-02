@@ -265,9 +265,26 @@ export function getOwnerApiBase() {
 }
 
 export function setOwnerApiBase(url) {
-  const trimmed = (url || '').trim().replace(/\/$/, '');
+  let trimmed = (url || '').trim().replace(/\/$/, '');
+  if (trimmed && !/^https?:\/\//i.test(trimmed)) {
+    trimmed = `https://${trimmed}`;
+  }
   if (trimmed) localStorage.setItem(OWNER_API_BASE_KEY, trimmed);
   else localStorage.removeItem(OWNER_API_BASE_KEY);
+}
+
+function ownerFetchError(base, err) {
+  const msg = err?.message || '';
+  if (msg.includes('Failed to fetch') || msg.includes('NetworkError') || msg.includes('Load failed')) {
+    if (/localhost|127\.0\.0\.1/i.test(base)) {
+      return 'localhost does not work on phone. Deploy to Render and use that https URL.';
+    }
+    if (/^https?:\/\/(192\.168|10\.|172\.(1[6-9]|2|3[01])\.)/i.test(base)) {
+      return 'Local Wi-Fi IP only works on same network. Owner in another district needs a Render cloud URL.';
+    }
+    return `Cannot reach ${base}. Server may be offline or URL is wrong. Deploy on Render first.`;
+  }
+  return msg || 'Connection failed';
 }
 
 function ownerApi(path) {
@@ -319,9 +336,13 @@ export async function ownerLogin(pin) {
 export async function ownerHealthCheck() {
   const base = getOwnerApiBase();
   if (!base) throw new Error('Enter cloud server URL first');
-  const res = await fetch(`${base}/api/health`);
-  if (!res.ok) throw new Error('Server not reachable');
-  return res.json();
+  try {
+    const res = await fetch(`${base}/api/health`);
+    if (!res.ok) throw new Error('Server not reachable');
+    return res.json();
+  } catch (err) {
+    throw new Error(ownerFetchError(base, err));
+  }
 }
 
 export async function pushOwnerReport(date) {
