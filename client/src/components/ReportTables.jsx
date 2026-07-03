@@ -21,7 +21,7 @@ function formatMatchDate(r) {
 }
 
 function formatTotal(r) {
-  if (r.is_bulk && !r.is_bulk_payment && (r.total === 0 || r.total == null) && r.status !== 'CLOSED') return '—';
+  if (r.is_bulk && !r.is_bulk_payment && (r.total === 0 || r.total == null)) return '—';
   return formatCurrency(r.total);
 }
 

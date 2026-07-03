@@ -54,6 +54,39 @@ function dedupeBulkPaymentWithSession(rows) {
   return rows.filter((r) => !(r.is_bulk_payment && bulkIdsWithSession.has(r.bulk_id)));
 }
 
+/** Same bulk, same day: show payment/total on first session row only (not every match slot). */
+function dedupeBulkSessionPaymentsSameDay(rows) {
+  const seen = new Set();
+  return rows.map((row) => {
+    if (!row.is_bulk || row.is_bulk_payment || !row.bulk_id) return row;
+    const date = row.match_date || row.start_date;
+    if (!date) return row;
+    const paid = (row.advance_gpay || 0) + (row.advance_cash || 0)
+      + (row.balance_gpay || 0) + (row.balance_cash || 0) > 0
+      || (row.total || 0) > 0;
+    if (!paid) return row;
+    const key = `${row.bulk_id}:${date}`;
+    if (seen.has(key)) {
+      return {
+        ...row,
+        total: 0,
+        advance_gpay: 0,
+        advance_cash: 0,
+        advance_date: null,
+        balance_gpay: 0,
+        balance_cash: 0,
+        balance_date: null,
+      };
+    }
+    seen.add(key);
+    return row;
+  });
+}
+
+function finalizeBulkRows(rows, sortFn) {
+  return dedupeBulkSessionPaymentsSameDay(sortFn(dedupeBulkPaymentWithSession(rows)));
+}
+
 export function queryReportData({ from, to, match_date, filter_type, section, include_bulk_pending }) {
   const paymentFilter = filter_type === 'payment' || filter_type === 'balance' || filter_type === 'advance';
   const addBulkPending = include_bulk_pending === true || include_bulk_pending === '1' || include_bulk_pending === 'true';
@@ -91,8 +124,7 @@ export function queryReportData({ from, to, match_date, filter_type, section, in
     if (addBulkPending && match_date) {
       turf = [...turf, ...queryBulkSessionsForDate(match_date, 'turf')];
     }
-    turf = dedupeBulkPaymentWithSession(turf);
-    turf = sortTurfRows(turf);
+    turf = finalizeBulkRows(turf, sortTurfRows);
   }
 
   if (wantOnline) {
@@ -118,8 +150,7 @@ export function queryReportData({ from, to, match_date, filter_type, section, in
     if (addBulkPending && match_date) {
       online = [...online, ...queryBulkSessionsForDate(match_date, 'online')];
     }
-    online = dedupeBulkPaymentWithSession(online);
-    online = sortTurfRows(online);
+    online = finalizeBulkRows(online, sortTurfRows);
   }
 
   if (wantGym) {
@@ -145,8 +176,7 @@ export function queryReportData({ from, to, match_date, filter_type, section, in
     if (addBulkPending && match_date) {
       gym = [...gym, ...queryBulkSessionsForDate(match_date, 'gym')];
     }
-    gym = dedupeBulkPaymentWithSession(gym);
-    gym = sortGymRows(gym);
+    gym = finalizeBulkRows(gym, sortGymRows);
   }
 
   if (wantFootball) {

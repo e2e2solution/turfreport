@@ -9,6 +9,8 @@ const API_FOOTBALL_COACHING = `${API_ROOT}/api/football-coaching`;
 const API_BULK = `${API_ROOT}/api/bulk`;
 const API_REPORT = `${API_ROOT}/api/report`;
 const API_SUMMARY = `${API_ROOT}/api/summary`;
+const API_PT = `${API_ROOT}/api/pt`;
+const API_CAFE = `${API_ROOT}/api/cafe`;
 const API_OWNER = `${API_ROOT}/api/owner`;
 
 function authHeaders(extra = {}) {
@@ -240,6 +242,108 @@ export async function downloadReport(params = {}) {
   URL.revokeObjectURL(url);
 }
 
+export async function fetchPtTrainers() {
+  return request(`${API_PT}/trainers`);
+}
+
+export async function createPtTrainer(data) {
+  return request(`${API_PT}/trainers`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+}
+
+export async function fetchPtTrainer(id) {
+  return request(`${API_PT}/trainers/${id}`);
+}
+
+export async function fetchPtClients(params = {}) {
+  const qs = new URLSearchParams(params).toString();
+  return request(`${API_PT}/clients${qs ? `?${qs}` : ''}`);
+}
+
+export async function createPtClient(data) {
+  return request(`${API_PT}/clients`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+}
+
+export async function fetchPtClient(id) {
+  return request(`${API_PT}/clients/${id}`);
+}
+
+export async function updatePtClientPayment(id, data) {
+  return request(`${API_PT}/clients/${id}/payment`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+}
+
+export async function markPtComplete(id) {
+  return request(`${API_PT}/clients/${id}/complete`, { method: 'POST' });
+}
+
+export async function addPtSession(id, data) {
+  return request(`${API_PT}/clients/${id}/sessions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deletePtSession(sessionId) {
+  return request(`${API_PT}/sessions/${sessionId}`, { method: 'DELETE' });
+}
+
+export async function addPtFreeze(id, data) {
+  return request(`${API_PT}/clients/${id}/freezes`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deletePtFreeze(freezeId) {
+  return request(`${API_PT}/freezes/${freezeId}`, { method: 'DELETE' });
+}
+
+export async function fetchPtReport(params = {}) {
+  const qs = new URLSearchParams(params).toString();
+  return request(`${API_PT}/report${qs ? `?${qs}` : ''}`);
+}
+
+export async function fetchCafeMonths() {
+  return request(`${API_CAFE}/months`);
+}
+
+export async function fetchCafeReport(month) {
+  return request(`${API_CAFE}/report?month=${encodeURIComponent(month)}`);
+}
+
+export async function uploadCafeReport(csv, filename) {
+  return request(`${API_CAFE}/upload`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ csv, filename }),
+  });
+}
+
+export async function deleteCafeReport(monthKey) {
+  return request(`${API_CAFE}/report/${monthKey}`, { method: 'DELETE' });
+}
+
+export async function pushCafeToOwner(month) {
+  return request(`${API_CAFE}/push-to-owner`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ month }),
+  });
+}
+
 export function todayISO() {
   return new Date().toISOString().split('T')[0];
 }
@@ -261,7 +365,19 @@ const OWNER_API_BASE_KEY = 'vsh_owner_api_base';
 export function getOwnerApiBase() {
   const stored = localStorage.getItem(OWNER_API_BASE_KEY);
   const fromEnv = (import.meta.env.VITE_API_BASE || '').replace(/\/$/, '');
-  return (stored || fromEnv).replace(/\/$/, '');
+  if (stored) return stored.replace(/\/$/, '');
+  if (fromEnv) return fromEnv;
+  if (import.meta.env.DEV && typeof window !== 'undefined') {
+    return window.location.origin.replace(/\/$/, '');
+  }
+  return '';
+}
+
+export function isOwnerDailyReport(report) {
+  if (!report?.payment_date) return false;
+  if (String(report.payment_date).startsWith('cafe-')) return false;
+  if (report.report_type === 'cafe') return false;
+  return Boolean(report.collection);
 }
 
 export function setOwnerApiBase(url) {
@@ -355,9 +471,49 @@ export async function pushOwnerReport(date) {
 
 export async function fetchOwnerReports(params = {}) {
   const qs = new URLSearchParams(params).toString();
-  return ownerRequest(`${ownerApi('/reports')}${qs ? `?${qs}` : ''}`);
+  const rows = await ownerRequest(`${ownerApi('/reports')}${qs ? `?${qs}` : ''}`);
+  return rows.filter(isOwnerDailyReport);
 }
 
 export async function fetchOwnerReport(date) {
   return ownerRequest(`${ownerApi(`/reports/${date}`)}`);
+}
+
+export async function fetchOwnerCafeMonths() {
+  try {
+    return await ownerRequest(`${ownerApi('/cafe/months')}`);
+  } catch {
+    const months = [];
+    const now = new Date();
+    for (let i = 0; i < 18; i += 1) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      try {
+        const r = await fetchOwnerReport(`cafe-${key}`);
+        if (r?.month_key || r?.report_type === 'cafe') {
+          months.push({
+            month_key: r.month_key || key,
+            label: r.label || key,
+            grand_total: r.grand_total,
+            grand_qty: r.grand_qty,
+            business_name: r.business_name,
+          });
+        }
+      } catch {
+        /* no report for this month */
+      }
+    }
+    if (!months.length) throw new Error('No cafe reports on cloud yet. Press Send to Owner on staff Cafe Analysis page.');
+    return months;
+  }
+}
+
+export async function fetchOwnerCafeReport(month) {
+  try {
+    return await ownerRequest(`${ownerApi(`/cafe/report?month=${encodeURIComponent(month)}`)}`);
+  } catch (err) {
+    const legacy = await fetchOwnerReport(`cafe-${month}`);
+    if (legacy?.month_key || legacy?.report_type === 'cafe') return legacy;
+    throw err;
+  }
 }

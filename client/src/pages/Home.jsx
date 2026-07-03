@@ -60,6 +60,14 @@ export default function Home() {
           <span className="action-icon">➕</span>
           <span>Add Entry (Turf / Online / Gym / Coaching)</span>
         </Link>
+        <Link to="/cafe" className="action-card cafe-action-card">
+          <span className="action-icon">☕</span>
+          <span>Cafe Analysis — Upload CSV</span>
+        </Link>
+        <Link to="/pt" className="action-card">
+          <span className="action-icon">🏋️</span>
+          <span>Personal Training</span>
+        </Link>
         <Link to="/bookings" className="action-card">
           <span className="action-icon">📋</span>
           <span>View & Update Records</span>

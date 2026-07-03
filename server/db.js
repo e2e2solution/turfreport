@@ -241,4 +241,68 @@ if (!ownerReportsTable) {
   console.log('Owner daily reports table created');
 }
 
+db.exec(`
+  CREATE TABLE IF NOT EXISTS pt_trainers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    phone TEXT DEFAULT '',
+    specializations TEXT DEFAULT '',
+    created_at TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS pt_clients (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    trainer_id INTEGER NOT NULL REFERENCES pt_trainers(id),
+    client_name TEXT NOT NULL,
+    pt_goal TEXT NOT NULL,
+    plan_type TEXT NOT NULL CHECK(plan_type IN ('22_sessions', '1_month', '3_month')),
+    start_date TEXT NOT NULL,
+    base_end_date TEXT NOT NULL,
+    total_amount REAL DEFAULT 0,
+    advance_gpay REAL DEFAULT 0,
+    advance_cash REAL DEFAULT 0,
+    advance_date TEXT,
+    balance_gpay REAL DEFAULT 0,
+    balance_cash REAL DEFAULT 0,
+    balance_date TEXT,
+    status TEXT DEFAULT 'ACTIVE' CHECK(status IN ('ACTIVE', 'COMPLETED')),
+    notes TEXT DEFAULT '',
+    completed_at TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS pt_sessions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    client_id INTEGER NOT NULL REFERENCES pt_clients(id) ON DELETE CASCADE,
+    session_date TEXT NOT NULL,
+    notes TEXT DEFAULT '',
+    created_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(client_id, session_date)
+  );
+
+  CREATE TABLE IF NOT EXISTS pt_freezes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    client_id INTEGER NOT NULL REFERENCES pt_clients(id) ON DELETE CASCADE,
+    freeze_from TEXT NOT NULL,
+    freeze_to TEXT NOT NULL,
+    days_count INTEGER NOT NULL DEFAULT 0,
+    reason TEXT NOT NULL,
+    notes TEXT DEFAULT '',
+    created_at TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS cafe_reports (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    month_key TEXT NOT NULL UNIQUE,
+    period_from TEXT NOT NULL,
+    period_to TEXT NOT NULL,
+    business_name TEXT DEFAULT '',
+    source_filename TEXT DEFAULT '',
+    grand_qty REAL DEFAULT 0,
+    grand_total REAL DEFAULT 0,
+    data TEXT NOT NULL,
+    uploaded_at TEXT DEFAULT (datetime('now'))
+  );
+`);
+
 export default db;

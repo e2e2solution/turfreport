@@ -108,3 +108,62 @@ export async function countReportsFromMongo() {
     return null;
   }
 }
+
+export async function syncCafeToMongo(snapshot) {
+  if (!isMongoReady()) {
+    const connected = await connectMongo();
+    if (!connected) return { ok: false, error: lastError };
+  }
+  try {
+    await getOwnerDb().collection('cafe_reports').updateOne(
+      { month_key: snapshot.month_key },
+      { $set: snapshot },
+      { upsert: true },
+    );
+    return { ok: true };
+  } catch (err) {
+    lastError = err.message;
+    return { ok: false, error: err.message };
+  }
+}
+
+export async function listCafeMonthsFromMongo() {
+  if (!isMongoReady()) {
+    const connected = await connectMongo();
+    if (!connected) return null;
+  }
+  try {
+    return getOwnerDb().collection('cafe_reports')
+      .find({}, {
+        projection: {
+          month_key: 1,
+          period_from: 1,
+          period_to: 1,
+          business_name: 1,
+          grand_qty: 1,
+          grand_total: 1,
+          source_filename: 1,
+          uploaded_at: 1,
+          label: 1,
+        },
+      })
+      .sort({ month_key: -1 })
+      .toArray();
+  } catch (err) {
+    lastError = err.message;
+    return null;
+  }
+}
+
+export async function getCafeReportFromMongo(monthKey) {
+  if (!isMongoReady()) {
+    const connected = await connectMongo();
+    if (!connected) return null;
+  }
+  try {
+    return getOwnerDb().collection('cafe_reports').findOne({ month_key: monthKey });
+  } catch (err) {
+    lastError = err.message;
+    return null;
+  }
+}

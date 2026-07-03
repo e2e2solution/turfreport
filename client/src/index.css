@@ -273,6 +273,11 @@ html, body, #root {
   background: linear-gradient(135deg, #edf2f7, #e2e8f0);
 }
 
+.cafe-action-card {
+  border: 2px solid #92400e;
+  background: linear-gradient(135deg, #fffbeb, #fef3c7);
+}
+
 .action-icon {
   font-size: 1.5rem;
 }
@@ -1046,7 +1051,7 @@ textarea:focus {
   width: 100%;
   max-width: 480px;
   margin: 0 auto;
-  padding-bottom: 2rem;
+  padding-bottom: 5rem;
 }
 
 .owner-logout-btn {
@@ -1150,6 +1155,12 @@ textarea:focus {
 .owner-card h3 {
   margin: 0 0 0.75rem;
   font-size: 1rem;
+  color: #1a202c;
+}
+
+.owner-card .recharts-cartesian-axis-tick text,
+.owner-card .recharts-label {
+  fill: #1a202c;
 }
 
 .owner-totals {
@@ -1363,4 +1374,268 @@ textarea:focus {
 .owner-brand-title {
   padding: 0 4.5rem;
   max-width: 100%;
+}
+
+.pt-session-calendar {
+  margin-top: 0.5rem;
+}
+
+.pt-calendar-summary {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+  font-size: 0.9rem;
+}
+
+.pt-calendar-legend {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.pt-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: #64748b;
+  font-size: 0.8rem;
+}
+
+.pt-legend-box {
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  border: 1px solid #cbd5e1;
+}
+
+.pt-legend-box.done {
+  background: #92d050;
+  border-color: #6ea832;
+}
+
+.pt-legend-box.frozen {
+  background: #fef3c7;
+  border-color: #f59e0b;
+}
+
+.pt-calendar-month {
+  margin-bottom: 1.25rem;
+}
+
+.pt-calendar-month h4 {
+  margin: 0 0 0.5rem;
+  font-size: 0.95rem;
+  color: #1a365d;
+}
+
+.pt-calendar-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  margin-bottom: 4px;
+}
+
+.pt-calendar-weekdays span {
+  text-align: center;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.pt-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+
+.pt-calendar-cell {
+  min-height: 44px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  background: #fff;
+}
+
+.pt-calendar-cell.pad {
+  border: none;
+  background: transparent;
+}
+
+.pt-calendar-cell.out-of-range {
+  background: #f8fafc;
+  border-color: #f1f5f9;
+}
+
+.pt-calendar-cell.out-of-range .pt-day-num {
+  color: #cbd5e1;
+}
+
+.pt-calendar-cell.in-range {
+  cursor: pointer;
+  user-select: none;
+}
+
+.pt-calendar-cell.in-range input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  margin: 0 0 2px;
+  cursor: pointer;
+}
+
+.pt-calendar-cell.in-range.checked {
+  background: #ecfccb;
+  border-color: #84cc16;
+}
+
+.pt-calendar-cell.in-range.frozen-day {
+  background: #fffbeb;
+  border-color: #fcd34d;
+}
+
+.pt-calendar-cell.disabled-day {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.pt-day-num {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #334155;
+}
+
+.cafe-upload-btn {
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  margin: 0;
+}
+
+.cafe-upload-btn input {
+  display: none;
+}
+
+.owner-bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: space-around;
+  padding: 8px 0 calc(8px + env(safe-area-inset-bottom));
+  background: rgba(15, 23, 42, 0.95);
+  border-top: 1px solid rgba(255, 255, 255, 0.15);
+  z-index: 20;
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+.owner-nav-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.65);
+  font-size: 0.7rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 6px 8px;
+}
+
+.owner-nav-item.active {
+  color: #fef3c7;
+}
+
+.owner-nav-icon {
+  font-size: 1.25rem;
+}
+
+.owner-cafe-filter label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+}
+
+.owner-tab-panel[hidden] {
+  display: none;
+}
+
+.owner-cafe-filter select {
+  padding: 0.5rem 0.65rem;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.owner-cafe-best {
+  background: rgba(254, 243, 199, 0.15);
+  border: 1px solid rgba(251, 191, 36, 0.4);
+}
+
+.owner-cafe-rank-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.owner-cafe-rank-row {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.55rem 0;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.owner-cafe-rank-row:last-child {
+  border-bottom: none;
+}
+
+.owner-cafe-rank-num {
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  background: #4472c4;
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.owner-cafe-rank-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.owner-cafe-rank-body strong {
+  display: block;
+  font-size: 0.9rem;
+  color: #1a365d;
+}
+
+.owner-cafe-rank-body small {
+  color: #64748b;
+  font-size: 0.75rem;
+}
+
+.owner-cafe-rank-amt {
+  color: #1a365d;
+  font-size: 0.9rem;
+  white-space: nowrap;
+}
+
+.owner-cafe-rank-low .owner-cafe-rank-body strong {
+  color: #64748b;
 }

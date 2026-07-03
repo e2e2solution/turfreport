@@ -5,8 +5,10 @@ import {
 import {
   ownerLogin, fetchOwnerReports, getOwnerToken, setOwnerToken, clearOwnerToken,
   formatCurrency, formatDateDMY, getOwnerApiBase, setOwnerApiBase, ownerHealthCheck,
+  isOwnerDailyReport,
 } from '../api';
 import OwnerReportPreview from '../components/OwnerReportPreview';
+import OwnerCafeView from '../components/OwnerCafeView';
 import { captureElementAsBlob, downloadBlob } from '../utils/captureImage';
 const COLORS = ['#4472c4', '#92d050', '#f4b084', '#ed7d31'];
 
@@ -155,8 +157,32 @@ function ReportDay({ report, selected, onSelect }) {
   );
 }
 
+function OwnerBottomNav({ active, onChange }) {
+  return (
+    <nav className="owner-bottom-nav">
+      <button
+        type="button"
+        className={`owner-nav-item${active === 'home' ? ' active' : ''}`}
+        onClick={() => onChange('home')}
+      >
+        <span className="owner-nav-icon">🏠</span>
+        <span>Home</span>
+      </button>
+      <button
+        type="button"
+        className={`owner-nav-item${active === 'cafe' ? ' active' : ''}`}
+        onClick={() => onChange('cafe')}
+      >
+        <span className="owner-nav-icon">☕</span>
+        <span>Cafe</span>
+      </button>
+    </nav>
+  );
+}
+
 export default function OwnerApp({ standalone = false, native = false }) {
   const [authed, setAuthed] = useState(Boolean(getOwnerToken()));
+  const [ownerTab, setOwnerTab] = useState('home');
   const [reports, setReports] = useState([]);
   const [selectedDate, setSelectedDate] = useState('');
   const [loading, setLoading] = useState(true);
@@ -191,10 +217,14 @@ export default function OwnerApp({ standalone = false, native = false }) {
     return <OwnerLogin onSuccess={() => setAuthed(true)} standalone={standalone} native={native} />;
   }
 
-  const report = reports.find((r) => r.payment_date === selectedDate) || reports[0];
+  const dailyReports = reports.filter(isOwnerDailyReport);
+  const report = dailyReports.find((r) => r.payment_date === selectedDate) || dailyReports[0];
+  const collection = report?.collection || {};
+  const collectionChart = report?.charts?.collection || [];
+  const hoursChart = report?.charts?.hours || [];
 
   const downloadReport = async () => {
-    if (!exportRef.current) return;
+    if (!exportRef.current || !report) return;
     setDownloading(true);
     try {
       const blob = await captureElementAsBlob(exportRef.current);
@@ -207,18 +237,19 @@ export default function OwnerApp({ standalone = false, native = false }) {
   };
 
   const highlights = report?.highlights || (report?.collection ? {
-    turf: report.collection.turf?.total || 0,
-    badminton: report.collection.badminton?.total || 0,
-    gym: report.collection.gym?.total || 0,
-    coaching: report.collection.football_coaching?.total || 0,
-    gpay: report.collection.gpay || 0,
-    cash: report.collection.cash || 0,
-    total: report.collection.total || 0,
+    turf: collection.turf?.total || 0,
+    badminton: collection.badminton?.total || 0,
+    gym: collection.gym?.total || 0,
+    coaching: collection.football_coaching?.total || 0,
+    gpay: collection.gpay || 0,
+    cash: collection.cash || 0,
+    total: collection.total || 0,
   } : null);
 
-  return (    <div className="owner-app">
+  return (
+    <div className="owner-app">
       <OwnerBrandHeader
-        subtitle="Owner Reports — Daily collection & turf hours"
+        subtitle={ownerTab === 'cafe' ? 'Cafe Analysis — Monthly sales' : 'Owner Reports — Daily collection & turf hours'}
         actions={(
           <>
             {standalone && !native && canInstall && !installed && (
@@ -238,20 +269,25 @@ export default function OwnerApp({ standalone = false, native = false }) {
       />
 
       <div className="owner-content">
-      {loading && <p className="muted owner-pad">Loading...</p>}
-      {error && <p className="alert error owner-pad">{error}</p>}
+        <div className="owner-tab-panel" hidden={ownerTab !== 'cafe'}>
+          <OwnerCafeView />
+        </div>
+        <div className="owner-tab-panel" hidden={ownerTab !== 'home'}>
+          <>
+            {loading && <p className="muted owner-pad">Loading...</p>}
+            {error && <p className="alert error owner-pad">{error}</p>}
 
-      {!loading && reports.length === 0 && (
-        <p className="muted owner-pad">
-          No reports yet. Staff must press &quot;Send Report to Owner&quot; from the staff app on PC.
-          {' '}Also check Render MongoDB is connected (health should show mongo: true).
-        </p>
-      )}
+            {!loading && dailyReports.length === 0 && (
+              <p className="muted owner-pad">
+                No reports yet. Staff must press &quot;Send Report to Owner&quot; from the staff app on PC.
+                {' '}Also check Render MongoDB is connected (health should show mongo: true).
+              </p>
+            )}
 
-      {reports.length > 0 && report && (
-        <>
+            {dailyReports.length > 0 && report && (
+              <>
           <div className="owner-day-scroll">
-            {reports.map((r) => (
+            {dailyReports.map((r) => (
               <ReportDay
                 key={r.payment_date}
                 report={r}
@@ -263,7 +299,7 @@ export default function OwnerApp({ standalone = false, native = false }) {
 
           <div className="owner-hero">
             <span>Total Collected</span>
-            <strong>{formatCurrency(report.collection.total)}</strong>
+            <strong>{formatCurrency(collection.total)}</strong>
             <small>Payment date: {formatDateDMY(report.payment_date)}</small>
           </div>
 
@@ -302,25 +338,30 @@ export default function OwnerApp({ standalone = false, native = false }) {
 
           <div className="owner-card">
             <h3>Collection Chart</h3>
+            {collectionChart.length ? (
             <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={report.charts.collection} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+              <BarChart data={collectionChart} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="label" tick={{ fontSize: 11 }} />
                 <YAxis tick={{ fontSize: 11 }} />
                 <Tooltip formatter={(v) => formatCurrency(v)} />
                 <Bar dataKey="amount" radius={[4, 4, 0, 0]}>
-                  {report.charts.collection.map((_, i) => (
+                  {collectionChart.map((_, i) => (
                     <Cell key={i} fill={COLORS[i % COLORS.length]} />
                   ))}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
+            ) : (
+              <p className="hint owner-pad">Chart data not in this report — re-send from staff app.</p>
+            )}
           </div>
 
           <div className="owner-card">
             <h3>Turf Hours (match day)</h3>
+            {hoursChart.length ? (
             <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={report.charts.hours} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+              <BarChart data={hoursChart} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="label" tick={{ fontSize: 11 }} />
                 <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
@@ -328,18 +369,21 @@ export default function OwnerApp({ standalone = false, native = false }) {
                 <Bar dataKey="hours" fill="#4472c4" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
+            ) : (
+              <p className="hint owner-pad">Hours chart not in this report.</p>
+            )}
             <p className="hint owner-foot">Total hours: <strong>{report.hours?.total || 0}h</strong></p>
           </div>
 
           <div className="owner-card owner-collection-card owner-report-bottom">
             <h3>Collection Details</h3>
             <div className="owner-totals owner-totals-standalone">
-              <div><span>Turf</span><strong>{formatCurrency(report.collection.turf.total)}</strong></div>
-              <div><span>Badminton</span><strong>{formatCurrency(report.collection.badminton.total)}</strong></div>
-              <div><span>Gym</span><strong>{formatCurrency(report.collection.gym.total)}</strong></div>
-              <div><span>Coaching</span><strong>{formatCurrency(report.collection.football_coaching?.total || 0)}</strong></div>
-              <div><span>GPay</span><strong>{formatCurrency(report.collection.gpay)}</strong></div>
-              <div><span>Cash</span><strong>{formatCurrency(report.collection.cash)}</strong></div>
+              <div><span>Turf</span><strong>{formatCurrency(collection.turf?.total)}</strong></div>
+              <div><span>Badminton</span><strong>{formatCurrency(collection.badminton?.total)}</strong></div>
+              <div><span>Gym</span><strong>{formatCurrency(collection.gym?.total)}</strong></div>
+              <div><span>Coaching</span><strong>{formatCurrency(collection.football_coaching?.total || 0)}</strong></div>
+              <div><span>GPay</span><strong>{formatCurrency(collection.gpay)}</strong></div>
+              <div><span>Cash</span><strong>{formatCurrency(collection.cash)}</strong></div>
             </div>
           </div>
 
@@ -362,14 +406,18 @@ export default function OwnerApp({ standalone = false, native = false }) {
                 )}
               </>
             )}
-          </div>
-        </>
-      )}
+              </div>
+              </>
+            )}
 
-      <button type="button" className="btn small owner-refresh" onClick={load} disabled={loading}>
-        Refresh
-      </button>
+            <button type="button" className="btn small owner-refresh" onClick={load} disabled={loading}>
+              Refresh
+            </button>
+          </>
+        </div>
       </div>
+
+      <OwnerBottomNav active={ownerTab} onChange={setOwnerTab} />
     </div>
   );
 }

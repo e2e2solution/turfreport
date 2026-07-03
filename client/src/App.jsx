@@ -13,6 +13,11 @@ import AddBulk from './pages/AddBulk';
 import BulkDetail from './pages/BulkDetail';
 import Summary from './pages/Summary';
 import OwnerApp from './pages/OwnerApp';
+import PTDashboard from './pages/PTDashboard';
+import PTTrainerDetail from './pages/PTTrainerDetail';
+import PTClientDetail from './pages/PTClientDetail';
+import PTReport from './pages/PTReport';
+import CafeReport from './pages/CafeReport';
 
 function AppRoutes() {
   return (
@@ -31,6 +36,11 @@ function AppRoutes() {
               <Route path="/bulk" element={<BulkList />} />
               <Route path="/bulk/add" element={<AddBulk />} />
               <Route path="/bulk/:id" element={<BulkDetail />} />
+              <Route path="/pt" element={<PTDashboard />} />
+              <Route path="/pt/report" element={<PTReport />} />
+              <Route path="/pt/trainers/:id" element={<PTTrainerDetail />} />
+              <Route path="/pt/clients/:id" element={<PTClientDetail />} />
+              <Route path="/cafe" element={<CafeReport />} />
               <Route path="/summary" element={<Summary />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>

@@ -1,3 +1,5 @@
+import { reportToLegacySyncPayload } from './cafeStore.js';
+
 /** Forward report snapshot to deployed cloud server when local MongoDB is unreachable. */
 export async function pushReportToCloud(snapshot) {
   const base = process.env.CLOUD_SYNC_URL?.replace(/\/$/, '');
@@ -22,4 +24,40 @@ export async function pushReportToCloud(snapshot) {
   } catch (err) {
     return { ok: false, error: err.message };
   }
+}
+
+export async function pushCafeToCloud(snapshot) {
+  const base = process.env.CLOUD_SYNC_URL?.replace(/\/$/, '');
+  const key = process.env.OWNER_SYNC_KEY;
+  if (!base || !key) {
+    return { ok: false, error: 'CLOUD_SYNC_URL or OWNER_SYNC_KEY not set in server/.env' };
+  }
+
+  const attempts = [
+    { path: '/api/owner/sync-cafe', body: snapshot },
+    { path: '/api/owner/sync', body: reportToLegacySyncPayload(snapshot) },
+  ];
+
+  let lastError = 'Cafe cloud sync failed';
+
+  for (const { path, body } of attempts) {
+    try {
+      const res = await fetch(`${base}${path}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Sync-Key': key,
+        },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) return { ok: true, url: base, via: path };
+      lastError = data.error || `Cafe cloud sync failed (${res.status})`;
+      if (res.status === 404) continue;
+    } catch (err) {
+      lastError = err.message;
+    }
+  }
+
+  return { ok: false, error: lastError };
 }
