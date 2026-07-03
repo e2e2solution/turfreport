@@ -1337,6 +1337,29 @@ textarea:focus {
   margin: 0.25rem 0 0.5rem;
 }
 
+.owner-report-bottom {
+  margin: 0 1rem 1rem;
+  padding: 1rem;
+  border-radius: 12px;
+  background: #fff;
+  color: #1a202c;
+}
+
+.owner-report-bottom h3 {
+  margin: 0 0 0.75rem;
+  font-size: 1rem;
+  color: #1a365d;
+}
+
+.owner-collection-card h3 {
+  margin: 0 0 0.75rem;
+  font-size: 1rem;
+}
+
+.owner-totals-standalone {
+  margin-top: 0;
+}
+
 .owner-brand-title {
   padding: 0 4.5rem;
   max-width: 100%;

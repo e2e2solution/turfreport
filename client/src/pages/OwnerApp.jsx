@@ -300,26 +300,8 @@ export default function OwnerApp({ standalone = false, native = false }) {
             Gym members joined: <strong>{report.gym_members_joined ?? 0}</strong>
           </div>
 
-          <div className="owner-preview-actions">
-            <button type="button" className="btn small" onClick={() => setShowPreview((v) => !v)}>
-              {showPreview ? 'Hide' : 'Preview'} Payment Report
-            </button>
-            {showPreview && report.payment_report && (
-              <button type="button" className="btn small owner-dl-btn" disabled={downloading} onClick={downloadReport}>
-                {downloading ? 'Saving...' : 'Download Report'}
-              </button>
-            )}
-          </div>
-
-          {showPreview && report.payment_report && (
-            <OwnerReportPreview report={report} exportRef={exportRef} />
-          )}
-
-          {!report.payment_report && (
-            <p className="hint owner-pad">Re-send report from staff app to get payment preview on phone.</p>
-          )}
-
-          <div className="owner-card">            <h3>Collection by Category</h3>
+          <div className="owner-card">
+            <h3>Collection Chart</h3>
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={report.charts.collection} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" />
@@ -333,14 +315,6 @@ export default function OwnerApp({ standalone = false, native = false }) {
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
-            <div className="owner-totals">
-              <div><span>Turf</span><strong>{formatCurrency(report.collection.turf.total)}</strong></div>
-              <div><span>Badminton</span><strong>{formatCurrency(report.collection.badminton.total)}</strong></div>
-              <div><span>Gym</span><strong>{formatCurrency(report.collection.gym.total)}</strong></div>
-              <div><span>Coaching</span><strong>{formatCurrency(report.collection.football_coaching?.total || 0)}</strong></div>
-              <div><span>GPay</span><strong>{formatCurrency(report.collection.gpay)}</strong></div>
-              <div><span>Cash</span><strong>{formatCurrency(report.collection.cash)}</strong></div>
-            </div>
           </div>
 
           <div className="owner-card">
@@ -355,6 +329,39 @@ export default function OwnerApp({ standalone = false, native = false }) {
               </BarChart>
             </ResponsiveContainer>
             <p className="hint owner-foot">Total hours: <strong>{report.hours?.total || 0}h</strong></p>
+          </div>
+
+          <div className="owner-card owner-collection-card owner-report-bottom">
+            <h3>Collection Details</h3>
+            <div className="owner-totals owner-totals-standalone">
+              <div><span>Turf</span><strong>{formatCurrency(report.collection.turf.total)}</strong></div>
+              <div><span>Badminton</span><strong>{formatCurrency(report.collection.badminton.total)}</strong></div>
+              <div><span>Gym</span><strong>{formatCurrency(report.collection.gym.total)}</strong></div>
+              <div><span>Coaching</span><strong>{formatCurrency(report.collection.football_coaching?.total || 0)}</strong></div>
+              <div><span>GPay</span><strong>{formatCurrency(report.collection.gpay)}</strong></div>
+              <div><span>Cash</span><strong>{formatCurrency(report.collection.cash)}</strong></div>
+            </div>
+          </div>
+
+          <div className="owner-report-bottom">
+            <h3>Daily Payment Report</h3>
+            {!report.payment_report ? (
+              <p className="hint">Re-send report from staff app to view payment details here.</p>
+            ) : (
+              <>
+                <div className="owner-preview-actions">
+                  <button type="button" className="btn small" onClick={() => setShowPreview((v) => !v)}>
+                    {showPreview ? 'Hide Report' : 'View Report'}
+                  </button>
+                  <button type="button" className="btn small owner-dl-btn" disabled={downloading} onClick={downloadReport}>
+                    {downloading ? 'Saving...' : 'Download Report'}
+                  </button>
+                </div>
+                {showPreview && (
+                  <OwnerReportPreview report={report} exportRef={exportRef} />
+                )}
+              </>
+            )}
           </div>
         </>
       )}
