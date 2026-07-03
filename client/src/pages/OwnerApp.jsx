@@ -89,7 +89,7 @@ function OwnerLogin({ onSuccess, standalone, native }) {
   };
 
   return (
-    <div className="owner-app">
+    <div className="owner-app owner-login-screen">
       <OwnerBrandHeader subtitle="Owner Report" />
       <div className="owner-login-wrap">
         <div className="owner-login-card">

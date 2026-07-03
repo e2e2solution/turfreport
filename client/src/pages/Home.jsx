@@ -76,6 +76,10 @@ export default function Home() {
           <span className="action-icon">📦</span>
           <span>Bulk Packages</span>
         </Link>
+        <a href="/owner" className="action-card owner-action-card">
+          <span className="action-icon">📱</span>
+          <span>Owner App (Mobile Reports)</span>
+        </a>
       </div>
     </div>
   );

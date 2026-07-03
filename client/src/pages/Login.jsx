@@ -60,8 +60,9 @@ export default function Login() {
             {loading ? 'Signing in...' : 'Login'}
           </button>
         </form>
-        <p className="hint" style={{ marginTop: 16, textAlign: 'center' }}>
-          Owner reports? <a href="/owner">Open owner page</a>
+        <p className="hint login-owner-link">
+          Owner app (reports on phone):{' '}
+          <a href="/owner">Open Owner Login</a>
         </p>
       </div>
     </div>

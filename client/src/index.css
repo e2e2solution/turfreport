@@ -27,6 +27,13 @@ body {
   color: var(--text);
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+  min-height: 100%;
+  min-height: 100dvh;
+}
+
+html, body, #root {
+  min-height: 100%;
+  min-height: 100dvh;
 }
 
 .app {
@@ -108,8 +115,19 @@ body {
 .login-sub {
   text-align: center;
   color: var(--muted);
+  margin-bottom: 20px;
+  font-size: 0.95rem;
+}
+
+.login-owner-link {
+  margin-top: 16px;
+  text-align: center;
   font-size: 0.9rem;
-  margin-bottom: 24px;
+}
+
+.login-owner-link a {
+  color: var(--blue);
+  font-weight: 600;
 }
 
 .login-card form {
@@ -248,6 +266,11 @@ body {
 
 .action-card:active {
   transform: scale(0.98);
+}
+
+.owner-action-card {
+  border: 2px solid #1a365d;
+  background: linear-gradient(135deg, #edf2f7, #e2e8f0);
 }
 
 .action-icon {
@@ -948,6 +971,20 @@ textarea:focus {
   flex-direction: column;
   background: linear-gradient(160deg, #1a365d 0%, #2c5282 45%, #1a202c 100%);
   color: #fff;
+}
+
+.owner-login-screen {
+  min-height: 100dvh;
+  width: 100%;
+}
+
+.owner-login-screen .owner-login-wrap {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem 1rem 2rem;
+  width: 100%;
 }
 
 .owner-brand-header {
