@@ -368,7 +368,13 @@ export default function Report() {
 
             <div className="preview-section">
               <h4>Gym — Payments Received (Advance or Balance)</h4>
-              <p className="hint">Paid on {dailyDate} · includes pending bulk</p>
+              <p className="hint">
+                Paid on {dailyDate}
+                {dailyReport.gym_members_joined != null && (
+                  <> · <strong>{dailyReport.gym_members_joined} gym members joined</strong></>
+                )}
+                {' '}· includes pending bulk
+              </p>
               <GymTable
                 rows={dailyReport.gym}
                 onDeleteBulk={handleDeleteBulkSession}
@@ -561,6 +567,9 @@ export default function Report() {
         </div>
         {gymPaymentPreview && (
           <div className="preview-section">
+            {gymPaymentPreview.gym_members_joined != null && (
+              <p className="hint"><strong>{gymPaymentPreview.gym_members_joined} gym members joined</strong> on this payment date</p>
+            )}
             <GymTable rows={gymPaymentPreview.gym} />
           </div>
         )}

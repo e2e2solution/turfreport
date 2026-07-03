@@ -3,6 +3,7 @@ import db from '../db.js';
 import { slotHours, bookingPayment, gymPayment } from '../utils/time.js';
 import { getRange, eachDay, dayLabel, weekBuckets } from '../utils/summaryDates.js';
 import { queryBulkSessionsForSummary } from '../utils/bulk.js';
+import { gymMemberCountForName } from '../utils/gymCount.js';
 
 const router = Router();
 const SPORTS = ['cricket', 'football', 'badminton'];
@@ -84,15 +85,17 @@ router.get('/', (req, res) => {
     addSport(turf, row.sport || 'cricket', hours, 0);
   }
 
-  const gym = { admissions: gymRows.length, byPlan: initGymPlans(), overall: { count: 0, payment: 0 } };
+  const gym = { admissions: 0, byPlan: initGymPlans(), overall: { count: 0, payment: 0 } };
   for (const row of gymRows) {
     const plan = row.plan_months || 1;
     const pay = gymPayment(row);
+    const members = gymMemberCountForName(row.name);
     if (!gym.byPlan[plan]) gym.byPlan[plan] = { count: 0, payment: 0 };
-    gym.byPlan[plan].count += 1;
+    gym.byPlan[plan].count += members;
     gym.byPlan[plan].payment += pay;
-    gym.overall.count += 1;
+    gym.overall.count += members;
     gym.overall.payment += pay;
+    gym.admissions += members;
   }
 
   const chart = buildChart(period, range, turfRows, onlineRows, gymRows);
@@ -125,7 +128,8 @@ function buildChart(period, range, turfRows, onlineRows, gymRows) {
     let gymPay = 0;
     for (const row of gymRows) {
       const plan = row.plan_months || 1;
-      gymDay[plan].count += 1;
+      const members = gymMemberCountForName(row.name);
+      gymDay[plan].count += members;
       gymDay[plan].payment += gymPayment(row);
       gymPay += gymPayment(row);
     }
@@ -169,7 +173,7 @@ function buildChart(period, range, turfRows, onlineRows, gymRows) {
     }
     for (const row of gymRows) {
       if (b.days.includes(row.start_date)) {
-        pt.gym += 1;
+        pt.gym += gymMemberCountForName(row.name);
         pt.payment += gymPayment(row);
       }
     }

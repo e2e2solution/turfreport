@@ -943,22 +943,79 @@ textarea:focus {
 /* Owner mobile app */
 .owner-app {
   min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
   background: linear-gradient(160deg, #1a365d 0%, #2c5282 45%, #1a202c 100%);
   color: #fff;
-  padding: 0 0 2rem;
+}
+
+.owner-brand-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  padding: 1rem 1rem 0.85rem;
+  text-align: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(0, 0, 0, 0.12);
+}
+
+.owner-brand-title h1 {
+  margin: 0;
+  font-size: 1.35rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.owner-brand-sub {
+  margin: 0.25rem 0 0;
+  font-size: 0.85rem;
+  opacity: 0.85;
+}
+
+.owner-brand-actions {
+  position: absolute;
+  right: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  gap: 0.45rem;
+}
+
+.owner-login-wrap {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem 1rem;
 }
 
 .owner-login-card {
+  width: 100%;
   max-width: 360px;
-  margin: 4rem auto;
   padding: 1.5rem;
   background: rgba(255, 255, 255, 0.08);
   border-radius: 12px;
 }
 
-.owner-login-card h1 {
-  font-size: 1.25rem;
-  margin: 0 0 0.25rem;
+.owner-login-hint {
+  text-align: center;
+  margin: 0 0 1rem;
+}
+
+.owner-content {
+  flex: 1;
+  width: 100%;
+  max-width: 480px;
+  margin: 0 auto;
+  padding-bottom: 2rem;
+}
+
+.owner-logout-btn {
+  background: rgba(255, 255, 255, 0.15) !important;
+  color: #fff !important;
+  border: 1px solid rgba(255, 255, 255, 0.3);
 }
 
 .owner-login-card label {
@@ -1148,4 +1205,102 @@ textarea:focus {
 .owner-install-header {
   background: #1a472a !important;
   color: #fff !important;
+}
+
+.owner-highlight-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+  margin: 0 1rem 0.75rem;
+}
+
+.owner-highlight {
+  padding: 0.65rem 0.75rem;
+  border-radius: 10px;
+  text-align: center;
+  color: #fff;
+}
+
+.owner-highlight span {
+  display: block;
+  font-size: 0.75rem;
+  opacity: 0.95;
+  margin-bottom: 0.2rem;
+}
+
+.owner-highlight strong {
+  font-size: 1rem;
+}
+
+.owner-hl-turf { background: #4472c4; }
+.owner-hl-badminton { background: #5b9bd5; }
+.owner-hl-gym { background: #92d050; color: #1a202c; }
+.owner-hl-coaching { background: #ed7d31; }
+.owner-hl-gpay { background: #7030a0; }
+.owner-hl-cash { background: #c55a11; }
+
+.owner-gym-badge {
+  margin: 0 1rem 0.75rem;
+  padding: 0.65rem 1rem;
+  border-radius: 10px;
+  background: rgba(146, 208, 80, 0.25);
+  border: 1px solid rgba(146, 208, 80, 0.5);
+  text-align: center;
+  font-size: 0.95rem;
+}
+
+.owner-preview-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+  margin: 0 1rem 0.75rem;
+  flex-wrap: wrap;
+}
+
+.owner-dl-btn {
+  background: #2b6cb0 !important;
+  color: #fff !important;
+}
+
+.owner-report-export h4 {
+  margin: 1rem 0 0.35rem;
+  font-size: 0.9rem;
+  color: #1a365d;
+}
+
+.owner-gym-count-line {
+  margin: 0 0 0.75rem;
+}
+
+.owner-mini-table-wrap {
+  overflow-x: auto;
+  margin-bottom: 0.5rem;
+}
+
+.owner-mini-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.78rem;
+}
+
+.owner-mini-table th,
+.owner-mini-table td {
+  border: 1px solid #e2e8f0;
+  padding: 0.35rem 0.45rem;
+  text-align: left;
+}
+
+.owner-mini-table th {
+  background: #edf2f7;
+  font-weight: 600;
+}
+
+.owner-mini-empty {
+  font-size: 0.85rem;
+  margin: 0.25rem 0 0.5rem;
+}
+
+.owner-brand-title {
+  padding: 0 4.5rem;
+  max-width: 100%;
 }

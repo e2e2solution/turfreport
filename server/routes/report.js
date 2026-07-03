@@ -3,6 +3,7 @@ import ExcelJS from 'exceljs';
 import { buildTurfSheet, buildOnlineSheet, buildGymSheet, buildFootballCoachingSheet } from '../utils/excel.js';
 import { queryReportData } from '../utils/reportQuery.js';
 import { calcDailyCollection } from '../utils/dailyCollection.js';
+import { countGymMembersJoined } from '../utils/gymCount.js';
 
 const router = Router();
 
@@ -17,6 +18,9 @@ router.get('/preview', (req, res) => {
   const data = queryReportData({
     from, to, match_date, filter_type, section: section || 'all', include_bulk_pending,
   });
+  if (data.paymentFilter) {
+    data.gym_members_joined = countGymMembersJoined(data.gym);
+  }
   res.json(data);
 });
 

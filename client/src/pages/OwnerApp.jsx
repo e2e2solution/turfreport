@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
 } from 'recharts';
@@ -6,7 +6,8 @@ import {
   ownerLogin, fetchOwnerReports, getOwnerToken, setOwnerToken, clearOwnerToken,
   formatCurrency, formatDateDMY, getOwnerApiBase, setOwnerApiBase, ownerHealthCheck,
 } from '../api';
-
+import OwnerReportPreview from '../components/OwnerReportPreview';
+import { captureElementAsBlob, downloadBlob } from '../utils/captureImage';
 const COLORS = ['#4472c4', '#92d050', '#f4b084', '#ed7d31'];
 
 function usePwaInstall() {
@@ -45,6 +46,18 @@ function usePwaInstall() {
   return { canInstall: Boolean(prompt), installed, install };
 }
 
+function OwnerBrandHeader({ subtitle, actions }) {
+  return (
+    <header className="owner-brand-header">
+      <div className="owner-brand-title">
+        <h1>Vathiyayath Sports Hub</h1>
+        {subtitle && <p className="owner-brand-sub">{subtitle}</p>}
+      </div>
+      {actions && <div className="owner-brand-actions">{actions}</div>}
+    </header>
+  );
+}
+
 function OwnerLogin({ onSuccess, standalone, native }) {
   const [pin, setPin] = useState('');
   const [serverUrl, setServerUrl] = useState(getOwnerApiBase() || '');
@@ -77,10 +90,11 @@ function OwnerLogin({ onSuccess, standalone, native }) {
 
   return (
     <div className="owner-app">
-      <div className="owner-login-card">
-        <h1>Vathiyayath Sports Hub</h1>
-        <p className="hint">Owner Report — works from anywhere via cloud server</p>
-        <form onSubmit={submit}>
+      <OwnerBrandHeader subtitle="Owner Report" />
+      <div className="owner-login-wrap">
+        <div className="owner-login-card">
+          <p className="hint owner-login-hint">Sign in to view daily collection from anywhere</p>
+          <form onSubmit={submit}>
           {error && <div className="alert error">{error}</div>}
           {showServerUrl && (
             <label>
@@ -122,6 +136,7 @@ function OwnerLogin({ onSuccess, standalone, native }) {
             {' '}<strong>Add to Home Screen</strong>
           </p>
         )}
+        </div>
       </div>
     </div>
   );
@@ -146,8 +161,10 @@ export default function OwnerApp({ standalone = false, native = false }) {
   const [selectedDate, setSelectedDate] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [downloading, setDownloading] = useState(false);
+  const [showPreview, setShowPreview] = useState(true);
+  const exportRef = useRef(null);
   const { canInstall, installed, install } = usePwaInstall();
-
   const load = () => {
     setLoading(true);
     setError('');
@@ -176,27 +193,51 @@ export default function OwnerApp({ standalone = false, native = false }) {
 
   const report = reports.find((r) => r.payment_date === selectedDate) || reports[0];
 
-  return (
-    <div className="owner-app">
-      <header className="owner-header">
-        <div>
-          <h1>Owner Reports</h1>
-          <p className="hint">Daily collection &amp; turf hours</p>
-        </div>
-        <button
-          type="button"
-          className="btn small"
-          onClick={() => { clearOwnerToken(); setAuthed(false); }}
-        >
-          Logout
-        </button>
-        {standalone && !native && canInstall && !installed && (
-          <button type="button" className="btn small owner-install-header" onClick={install}>
-            Install
-          </button>
-        )}
-      </header>
+  const downloadReport = async () => {
+    if (!exportRef.current) return;
+    setDownloading(true);
+    try {
+      const blob = await captureElementAsBlob(exportRef.current);
+      downloadBlob(blob, `owner-report-${report.payment_date}.png`);
+    } catch (err) {
+      alert(err.message || 'Download failed');
+    } finally {
+      setDownloading(false);
+    }
+  };
 
+  const highlights = report?.highlights || (report?.collection ? {
+    turf: report.collection.turf?.total || 0,
+    badminton: report.collection.badminton?.total || 0,
+    gym: report.collection.gym?.total || 0,
+    coaching: report.collection.football_coaching?.total || 0,
+    gpay: report.collection.gpay || 0,
+    cash: report.collection.cash || 0,
+    total: report.collection.total || 0,
+  } : null);
+
+  return (    <div className="owner-app">
+      <OwnerBrandHeader
+        subtitle="Owner Reports — Daily collection & turf hours"
+        actions={(
+          <>
+            {standalone && !native && canInstall && !installed && (
+              <button type="button" className="btn small owner-install-header" onClick={install}>
+                Install
+              </button>
+            )}
+            <button
+              type="button"
+              className="btn small owner-logout-btn"
+              onClick={() => { clearOwnerToken(); setAuthed(false); }}
+            >
+              Logout
+            </button>
+          </>
+        )}
+      />
+
+      <div className="owner-content">
       {loading && <p className="muted owner-pad">Loading...</p>}
       {error && <p className="alert error owner-pad">{error}</p>}
 
@@ -226,8 +267,59 @@ export default function OwnerApp({ standalone = false, native = false }) {
             <small>Payment date: {formatDateDMY(report.payment_date)}</small>
           </div>
 
-          <div className="owner-card">
-            <h3>Collection by Category</h3>
+          {highlights && (
+            <div className="owner-highlight-grid">
+              <div className="owner-highlight owner-hl-turf">
+                <span>Turf</span>
+                <strong>{formatCurrency(highlights.turf)}</strong>
+              </div>
+              <div className="owner-highlight owner-hl-badminton">
+                <span>Badminton</span>
+                <strong>{formatCurrency(highlights.badminton)}</strong>
+              </div>
+              <div className="owner-highlight owner-hl-gym">
+                <span>Gym</span>
+                <strong>{formatCurrency(highlights.gym)}</strong>
+              </div>
+              <div className="owner-highlight owner-hl-coaching">
+                <span>Coaching</span>
+                <strong>{formatCurrency(highlights.coaching)}</strong>
+              </div>
+              <div className="owner-highlight owner-hl-gpay">
+                <span>GPay</span>
+                <strong>{formatCurrency(highlights.gpay)}</strong>
+              </div>
+              <div className="owner-highlight owner-hl-cash">
+                <span>Cash</span>
+                <strong>{formatCurrency(highlights.cash)}</strong>
+              </div>
+            </div>
+          )}
+
+          <div className="owner-gym-badge">
+            Gym members joined: <strong>{report.gym_members_joined ?? 0}</strong>
+          </div>
+
+          <div className="owner-preview-actions">
+            <button type="button" className="btn small" onClick={() => setShowPreview((v) => !v)}>
+              {showPreview ? 'Hide' : 'Preview'} Payment Report
+            </button>
+            {showPreview && report.payment_report && (
+              <button type="button" className="btn small owner-dl-btn" disabled={downloading} onClick={downloadReport}>
+                {downloading ? 'Saving...' : 'Download Report'}
+              </button>
+            )}
+          </div>
+
+          {showPreview && report.payment_report && (
+            <OwnerReportPreview report={report} exportRef={exportRef} />
+          )}
+
+          {!report.payment_report && (
+            <p className="hint owner-pad">Re-send report from staff app to get payment preview on phone.</p>
+          )}
+
+          <div className="owner-card">            <h3>Collection by Category</h3>
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={report.charts.collection} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" />
@@ -270,6 +362,7 @@ export default function OwnerApp({ standalone = false, native = false }) {
       <button type="button" className="btn small owner-refresh" onClick={load} disabled={loading}>
         Refresh
       </button>
+      </div>
     </div>
   );
 }
