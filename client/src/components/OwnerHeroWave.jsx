@@ -1,23 +1,23 @@
 import { useEffect, useMemo, useRef } from 'react';
-import { subscribeDeviceMotion } from '../utils/deviceMotionBus';
 import {
   buildValueWaveLayers, computeValueScore, heroGradientForScore,
 } from '../utils/waveValueScore';
 
 const lerp = (a, b, t) => a + (b - a) * t;
-const BOAT_SPEED = 0.75;
+const BOAT_SPEED = 0.55;
+const isTouchDevice = typeof window !== 'undefined' && 'ontouchstart' in window;
 
-function waveYAt(x, w, h, phase, wave, yShift) {
-  const baseY = h * wave.y + yShift;
+function waveYAt(x, w, h, phase, wave) {
+  const baseY = h * wave.y;
   return baseY + Math.sin(x * wave.length + phase) * wave.amp;
 }
 
-function drawWave(ctx, w, h, phase, wave, yShift) {
-  const baseY = h * wave.y + yShift;
+function drawWave(ctx, w, h, phase, wave) {
+  const baseY = h * wave.y;
   ctx.beginPath();
   ctx.moveTo(0, h);
   ctx.lineTo(0, baseY);
-  for (let x = 0; x <= w; x += 2) {
+  for (let x = 0; x <= w; x += 3) {
     const y = baseY + Math.sin(x * wave.length + phase) * wave.amp;
     ctx.lineTo(x, y);
   }
@@ -27,16 +27,14 @@ function drawWave(ctx, w, h, phase, wave, yShift) {
   ctx.fill();
 }
 
-function drawBoat(ctx, w, h, phase, waves, motion, travel) {
+function drawBoat(ctx, w, h, phase, waves, travel) {
   const wave = waves[0];
   if (!wave) return;
 
-  const yShift = motion.phaseY * 0.6;
   const cycle = w + 72;
   const bx = (travel % cycle) - 36;
-  const wavePhase = phase + motion.phaseX;
-  const by = waveYAt(bx, w, h, wavePhase, wave, yShift) - 2;
-  const rock = Math.sin(phase * 0.65 + motion.phaseX * 0.4 + bx * 0.03) * 0.07 + motion.tx * 0.0015;
+  const by = waveYAt(bx, w, h, phase, wave) - 2;
+  const rock = Math.sin(phase * 0.5 + bx * 0.02) * 0.05;
 
   ctx.save();
   ctx.translate(bx, by);
@@ -86,12 +84,10 @@ export default function OwnerHeroWave({
 }) {
   const waterCanvasRef = useRef(null);
   const boatCanvasRef = useRef(null);
-  const contentRef = useRef(null);
   const heroRef = useRef(null);
-  const motionRef = useRef({ tx: 0, ty: 0, phaseX: 0, phaseY: 0 });
-  const targetRef = useRef({ tx: 0, ty: 0, phaseX: 0, phaseY: 0 });
   const displayScoreRef = useRef(0.5);
   const wavesRef = useRef([]);
+  const sizeRef = useRef({ w: 0, h: 0 });
 
   const score = useMemo(
     () => computeValueScore(value, minValue, maxValue),
@@ -103,12 +99,6 @@ export default function OwnerHeroWave({
   useEffect(() => {
     scoreRef.current = score;
   }, [score]);
-
-  useEffect(() => {
-    return subscribeDeviceMotion((t) => {
-      targetRef.current = t;
-    });
-  }, []);
 
   useEffect(() => {
     const waterCanvas = waterCanvasRef.current;
@@ -124,73 +114,77 @@ export default function OwnerHeroWave({
     let dpr = 1;
     let w = 0;
     let h = 0;
+    let resizeTimer = 0;
 
-    const resize = () => {
+    const applySize = () => {
       const parent = waterCanvas.parentElement;
       if (!parent) return;
-      dpr = Math.min(window.devicePixelRatio || 1, 2);
       const rect = parent.getBoundingClientRect();
-      w = rect.width;
-      h = rect.height;
+      const nextW = Math.round(rect.width);
+      const nextH = Math.round(rect.height);
+      if (Math.abs(nextW - sizeRef.current.w) < 2 && Math.abs(nextH - sizeRef.current.h) < 2) {
+        return;
+      }
+      sizeRef.current = { w: nextW, h: nextH };
+      w = nextW;
+      h = nextH;
+      dpr = Math.min(window.devicePixelRatio || 1, isTouchDevice ? 1.5 : 2);
       syncCanvasSize(waterCanvas, waterCtx, w, h, dpr);
       syncCanvasSize(boatCanvas, boatCtx, w, h, dpr);
     };
 
+    const resize = () => {
+      clearTimeout(resizeTimer);
+      resizeTimer = window.setTimeout(applySize, isTouchDevice ? 180 : 80);
+    };
+
     const paintWater = () => {
-      const motion = motionRef.current;
-      const { phaseX, phaseY } = motion;
       waterCtx.clearRect(0, 0, w, h);
       wavesRef.current.forEach((wave, i) => {
-        drawWave(waterCtx, w, h, phase + phaseX + i * 1.4, wave, phaseY * (0.6 + i * 0.2));
+        drawWave(waterCtx, w, h, phase + i * 1.4, wave);
       });
     };
 
     const paintBoat = () => {
-      const motion = motionRef.current;
       boatCtx.clearRect(0, 0, w, h);
-      drawBoat(boatCtx, w, h, phase, wavesRef.current, motion, boatTravel);
+      drawBoat(boatCtx, w, h, phase, wavesRef.current, boatTravel);
     };
 
     const paintAll = () => {
+      if (!w || !h) return;
       paintWater();
       paintBoat();
     };
 
-    resize();
+    applySize();
+    wavesRef.current = buildValueWaveLayers(scoreRef.current);
     paintAll();
 
     const ro = new ResizeObserver(resize);
     ro.observe(waterCanvas.parentElement);
 
     if (prefersReduced) {
-      wavesRef.current = buildValueWaveLayers(scoreRef.current);
-      paintAll();
       const hero = heroRef.current?.closest('.owner-hero');
       if (hero) hero.style.background = heroGradientForScore(scoreRef.current, variant);
-      return () => ro.disconnect();
+      return () => {
+        clearTimeout(resizeTimer);
+        ro.disconnect();
+      };
     }
 
     const tick = () => {
-      phase += 0.04;
+      phase += isTouchDevice ? 0.028 : 0.04;
       boatTravel += BOAT_SPEED;
 
-      const m = motionRef.current;
-      const t = targetRef.current;
-      m.tx = lerp(m.tx, t.tx, 0.1);
-      m.ty = lerp(m.ty, t.ty, 0.1);
-      m.phaseX = lerp(m.phaseX, t.phaseX, 0.1);
-      m.phaseY = lerp(m.phaseY, t.phaseY, 0.1);
-
-      displayScoreRef.current = lerp(displayScoreRef.current, scoreRef.current, 0.07);
-      wavesRef.current = buildValueWaveLayers(displayScoreRef.current);
+      const prevScore = displayScoreRef.current;
+      displayScoreRef.current = lerp(displayScoreRef.current, scoreRef.current, 0.04);
+      if (Math.abs(displayScoreRef.current - prevScore) > 0.008) {
+        wavesRef.current = buildValueWaveLayers(displayScoreRef.current);
+      }
 
       const hero = heroRef.current?.closest('.owner-hero');
       if (hero) {
         hero.style.background = heroGradientForScore(displayScoreRef.current, variant);
-      }
-
-      if (contentRef.current) {
-        contentRef.current.style.transform = `translate3d(${m.tx.toFixed(2)}px, ${m.ty.toFixed(2)}px, 0)`;
       }
 
       paintAll();
@@ -200,6 +194,7 @@ export default function OwnerHeroWave({
 
     return () => {
       cancelAnimationFrame(raf);
+      clearTimeout(resizeTimer);
       ro.disconnect();
     };
   }, [variant]);
@@ -208,7 +203,7 @@ export default function OwnerHeroWave({
     <div ref={heroRef} className="owner-hero-wave-wrap">
       <canvas ref={waterCanvasRef} className="owner-hero-wave-canvas" aria-hidden="true" />
       <canvas ref={boatCanvasRef} className="owner-hero-boat-canvas" aria-hidden="true" />
-      <div ref={contentRef} className="owner-hero-wave-content">
+      <div className="owner-hero-wave-content">
         {children}
       </div>
     </div>

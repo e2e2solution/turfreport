@@ -5,8 +5,8 @@ import {
 import {
   ownerLogin, fetchOwnerReports, getOwnerToken, setOwnerToken, clearOwnerToken,
   formatCurrency, formatDateDMY, getOwnerApiBase, setOwnerApiBase, ownerHealthCheck,
-  isOwnerDailyReport, markOwnerReviewRead,
-  fetchOwnerReviews, countUnreadOwnerReviews,
+  isOwnerDailyReport, markOwnerReviewRead, markAllOwnerReviewsRead,
+  fetchOwnerReviews, countUnreadOwnerReviews, isReviewUnread,
 } from '../api';
 import OwnerReportPreview from '../components/OwnerReportPreview';
 import OwnerCafeView from '../components/OwnerCafeView';
@@ -56,7 +56,7 @@ function usePwaInstall() {
   return { canInstall: Boolean(prompt), installed, install };
 }
 
-function OwnerBrandHeader({ subtitle, actions }) {
+function OwnerBrandHeader({ subtitle, rightActions }) {
   return (
     <header className="owner-brand-header">
       <div className="owner-brand-title">
@@ -64,7 +64,7 @@ function OwnerBrandHeader({ subtitle, actions }) {
         <h1>Vathiyayath Sports Hub</h1>
         {subtitle && <p className="owner-brand-sub">{subtitle}</p>}
       </div>
-      {actions && <div className="owner-brand-actions">{actions}</div>}
+      {rightActions && <div className="owner-brand-right">{rightActions}</div>}
     </header>
   );
 }
@@ -175,7 +175,7 @@ function ReportDay({ report, selected, onSelect }) {
   );
 }
 
-function OwnerBottomNav({ active, onChange }) {
+function OwnerBottomNav({ active, onChange, onNotif, unreadCount }) {
   return (
     <nav className="owner-bottom-nav">
       <button
@@ -193,6 +193,20 @@ function OwnerBottomNav({ active, onChange }) {
       >
         <span className="owner-nav-icon">☕</span>
         <span>Cafe</span>
+      </button>
+      <button
+        type="button"
+        className={`owner-nav-item owner-nav-notif${unreadCount > 0 ? ' has-notif' : ''}`}
+        onClick={onNotif}
+        aria-label={unreadCount > 0 ? `${unreadCount} new customer reviews` : 'Customer reviews'}
+      >
+        <span className="owner-nav-icon-wrap">
+          <span className="owner-nav-icon" aria-hidden="true">🔔</span>
+          {unreadCount > 0 && (
+            <span className="owner-nav-badge">{unreadCount > 9 ? '9+' : unreadCount}</span>
+          )}
+        </span>
+        <span>Alerts</span>
       </button>
     </nav>
   );
@@ -233,8 +247,7 @@ export default function OwnerApp({ standalone = false, native = false }) {
         setReviewList(rows);
         const unread = countUnreadOwnerReviews(rows);
         setUnreadCount(unread);
-        const latest = rows.find((r) => !r.read_by_owner
-          && !JSON.parse(localStorage.getItem('vsh_owner_dismissed_reviews') || '[]').includes(r.review_id));
+        const latest = rows.find((r) => isReviewUnread(r));
         if (latest?.review_id) {
           setPendingReview(latest);
           notifyNewReview(latest);
@@ -302,15 +315,37 @@ export default function OwnerApp({ standalone = false, native = false }) {
 
   const handleReviewRead = async (reviewId) => {
     await markOwnerReviewRead(reviewId);
+    setReviewList((prev) => prev.map((r) => (
+      r.review_id === reviewId ? { ...r, read_by_owner: true } : r
+    )));
     const rows = await fetchOwnerReviews().catch(() => reviewList);
-    setReviewList(rows);
-    setUnreadCount(countUnreadOwnerReviews(rows));
-    const latest = rows.find((r) => !r.read_by_owner);
+    const merged = rows.map((r) => (
+      r.review_id === reviewId ? { ...r, read_by_owner: true } : r
+    ));
+    setReviewList(merged);
+    setUnreadCount(countUnreadOwnerReviews(merged));
+    const latest = merged.find((r) => isReviewUnread(r));
     setPendingReview(latest || null);
     if (!latest) {
       setShowNotifBanner(false);
       lastBannerReviewRef.current = null;
     }
+  };
+
+  const handleMarkAllRead = async (reviewIds) => {
+    await markAllOwnerReviewsRead(reviewIds);
+    setReviewList((prev) => prev.map((r) => (
+      reviewIds.includes(r.review_id) ? { ...r, read_by_owner: true } : r
+    )));
+    setUnreadCount(0);
+    setPendingReview(null);
+    setShowNotifBanner(false);
+    lastBannerReviewRef.current = null;
+  };
+
+  const handleExit = () => {
+    clearOwnerToken();
+    setAuthed(false);
   };
 
   const closeReviewList = () => {
@@ -358,20 +393,8 @@ export default function OwnerApp({ standalone = false, native = false }) {
     <div className="owner-app">
       <OwnerBrandHeader
         subtitle={ownerTab === 'cafe' ? 'Cafe Analysis — Monthly sales' : 'Owner Reports — Daily collection & turf hours'}
-        actions={(
+        rightActions={(
           <>
-            <button
-              type="button"
-              className={`owner-notif-btn${unreadCount > 0 ? ' has-notif' : ''}`}
-              onClick={openReview}
-              aria-label={unreadCount > 0 ? `${unreadCount} new customer reviews` : 'Customer reviews'}
-              title={unreadCount > 0 ? `${unreadCount} new review(s)` : 'Customer reviews'}
-            >
-              <span className="owner-notif-icon" aria-hidden="true">🔔</span>
-              {unreadCount > 0 && (
-                <span className="owner-notif-count">{unreadCount > 9 ? '9+' : unreadCount}</span>
-              )}
-            </button>
             {standalone && !native && canInstall && !installed && (
               <button type="button" className="btn small owner-install-header" onClick={install}>
                 Install
@@ -379,10 +402,12 @@ export default function OwnerApp({ standalone = false, native = false }) {
             )}
             <button
               type="button"
-              className="btn small owner-logout-btn"
-              onClick={() => { clearOwnerToken(); setAuthed(false); }}
+              className="owner-logout-icon-btn"
+              onClick={handleExit}
+              aria-label="Logout"
+              title="Logout"
             >
-              Logout
+              ⏻
             </button>
           </>
         )}
@@ -557,7 +582,12 @@ export default function OwnerApp({ standalone = false, native = false }) {
         </div>
       </div>
 
-      <OwnerBottomNav active={ownerTab} onChange={setOwnerTab} />
+      <OwnerBottomNav
+        active={ownerTab}
+        onChange={setOwnerTab}
+        onNotif={openReview}
+        unreadCount={unreadCount}
+      />
 
       {showReviewList && (
         <OwnerReviewListPopup
@@ -565,6 +595,7 @@ export default function OwnerApp({ standalone = false, native = false }) {
           loading={reviewsLoading}
           onClose={closeReviewList}
           onMarkRead={handleReviewRead}
+          onMarkAllRead={handleMarkAllRead}
         />
       )}
     </div>

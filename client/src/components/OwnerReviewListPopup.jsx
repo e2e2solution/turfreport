@@ -1,4 +1,5 @@
 import { happinessEmoji, happinessLabel } from './OwnerReviewPopup';
+import { isReviewUnread } from '../api';
 
 function formatReviewDate(iso) {
   if (!iso) return '';
@@ -10,16 +11,17 @@ function formatReviewDate(iso) {
 }
 
 export default function OwnerReviewListPopup({
-  reviews, loading, onClose, onMarkRead,
+  reviews, loading, onClose, onMarkRead, onMarkAllRead,
 }) {
-  const unread = reviews.filter((r) => !r.read_by_owner);
+  const unread = reviews.filter(isReviewUnread);
 
   const markOne = async (reviewId) => {
     await onMarkRead(reviewId);
   };
 
   const markAll = async () => {
-    await Promise.all(unread.map((r) => onMarkRead(r.review_id)));
+    if (!unread.length) return;
+    await onMarkAllRead(unread.map((r) => r.review_id));
     onClose();
   };
 
@@ -53,7 +55,7 @@ export default function OwnerReviewListPopup({
           <ul className="owner-review-list">
             {reviews.map((review) => {
               const name = review.customer_name?.trim() || 'A customer';
-              const isUnread = !review.read_by_owner;
+              const isUnread = isReviewUnread(review);
               return (
                 <li
                   key={review.review_id}

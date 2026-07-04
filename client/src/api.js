@@ -593,11 +593,14 @@ export async function fetchOwnerReviews() {
   }
 }
 
+export function isReviewUnread(review) {
+  if (!review?.review_id) return false;
+  if (review.read_by_owner) return false;
+  return !getDismissedReviewIds().includes(review.review_id);
+}
+
 export function countUnreadOwnerReviews(reviews) {
-  const dismissed = getDismissedReviewIds();
-  return (reviews || []).filter(
-    (r) => !r.read_by_owner && !dismissed.includes(r.review_id),
-  ).length;
+  return (reviews || []).filter(isReviewUnread).length;
 }
 
 export async function fetchOwnerLatestReview() {
@@ -614,9 +617,14 @@ export async function fetchOwnerLatestReview() {
 }
 
 export async function markOwnerReviewRead(reviewId) {
+  dismissReviewLocally(reviewId);
   try {
     await ownerRequest(ownerApi(`/reviews/${reviewId}/read`), { method: 'POST' });
   } catch {
-    dismissReviewLocally(reviewId);
+    /* local dismiss keeps UI in sync when cloud route is unavailable */
   }
+}
+
+export async function markAllOwnerReviewsRead(reviewIds) {
+  await Promise.all(reviewIds.map((id) => markOwnerReviewRead(id)));
 }

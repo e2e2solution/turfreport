@@ -10,13 +10,14 @@ function notify() {
 }
 
 function applyOrientation(beta, gamma) {
-  const g = clamp(gamma ?? 0, -45, 45);
-  const b = clamp((beta ?? 0) - 45, -30, 30);
+  const g = clamp(gamma ?? 0, -30, 30);
+  const b = clamp((beta ?? 0) - 45, -20, 20);
+  const scale = 'ontouchstart' in window ? 0.45 : 1;
   target = {
-    tx: (g / 45) * 14,
-    ty: (b / 30) * 10,
-    phaseX: (g / 45) * 2.2,
-    phaseY: (b / 30) * 8,
+    tx: (g / 30) * 8 * scale,
+    ty: (b / 20) * 5 * scale,
+    phaseX: (g / 30) * 1.2 * scale,
+    phaseY: (b / 20) * 4 * scale,
   };
   notify();
 }
@@ -53,7 +54,9 @@ function startListening() {
   if (listening || typeof window === 'undefined') return;
   listening = true;
   window.addEventListener('deviceorientation', onOrientation, { passive: true });
-  window.addEventListener('devicemotion', onMotion, { passive: true });
+  if (!('ontouchstart' in window)) {
+    window.addEventListener('devicemotion', onMotion, { passive: true });
+  }
 }
 
 export async function enableDeviceMotion() {
