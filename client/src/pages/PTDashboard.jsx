@@ -11,6 +11,7 @@ const emptyTrainer = {
 export default function PTDashboard() {
   const [trainers, setTrainers] = useState([]);
   const [clients, setClients] = useState([]);
+  const [trainerId, setTrainerId] = useState('');
   const [status, setStatus] = useState('ACTIVE');
   const [form, setForm] = useState(emptyTrainer);
   const [loading, setLoading] = useState(true);
@@ -18,9 +19,13 @@ export default function PTDashboard() {
 
   const load = () => {
     setLoading(true);
+    const clientParams = {};
+    if (status) clientParams.status = status;
+    if (trainerId) clientParams.trainer_id = trainerId;
+
     Promise.all([
       fetchPtTrainers(),
-      fetchPtClients(status ? { status } : {}),
+      fetchPtClients(clientParams),
     ])
       .then(([trainerRows, clientRows]) => {
         setTrainers(trainerRows);
@@ -30,7 +35,7 @@ export default function PTDashboard() {
       .finally(() => setLoading(false));
   };
 
-  useEffect(load, [status]);
+  useEffect(load, [status, trainerId]);
 
   const set = (field, value) => setForm((f) => ({ ...f, [field]: value }));
 
@@ -50,6 +55,7 @@ export default function PTDashboard() {
 
   const activeCount = clients.filter((c) => c.status === 'ACTIVE').length;
   const completedCount = clients.filter((c) => c.status === 'COMPLETED').length;
+  const selectedTrainer = trainers.find((t) => String(t.id) === trainerId);
 
   return (
     <div className="page">
@@ -64,7 +70,7 @@ export default function PTDashboard() {
           <strong className="stat-value">{trainers.length}</strong>
         </div>
         <div className="stat-card">
-          <span className="stat-label">Clients Loaded</span>
+          <span className="stat-label">Clients Shown</span>
           <strong className="stat-value">{clients.length}</strong>
         </div>
         <div className="stat-card">
@@ -75,6 +81,74 @@ export default function PTDashboard() {
           <span className="stat-label">Completed</span>
           <strong className="stat-value">{completedCount}</strong>
         </div>
+      </div>
+
+      <div className="card pt-client-panel">
+        <div className="pt-client-filters">
+          <label>
+            Trainer
+            <select value={trainerId} onChange={(e) => setTrainerId(e.target.value)}>
+              <option value="">All trainers</option>
+              {trainers.map((t) => (
+                <option key={t.id} value={t.id}>{t.name}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Status
+            <select value={status} onChange={(e) => setStatus(e.target.value)}>
+              <option value="">All</option>
+              <option value="ACTIVE">Active</option>
+              <option value="COMPLETED">Completed</option>
+            </select>
+          </label>
+        </div>
+
+        <h3>
+          {selectedTrainer ? `${selectedTrainer.name} — Clients` : 'All PT Clients'}
+        </h3>
+
+        {loading ? (
+          <p className="muted">Loading...</p>
+        ) : !clients.length ? (
+          <p className="muted">No PT clients found for this filter.</p>
+        ) : (
+          <div className="pt-client-table-wrap">
+            <table className="pt-client-table">
+              <thead>
+                <tr>
+                  <th>Client</th>
+                  <th>Sessions done</th>
+                  <th>Remaining</th>
+                  <th>Payment due</th>
+                </tr>
+              </thead>
+              <tbody>
+                {clients.map((client) => (
+                  <tr key={client.id}>
+                    <td>
+                      <Link to={`/pt/clients/${client.id}`} className="pt-client-link">
+                        <strong>{client.client_name}</strong>
+                        <small>{client.plan_label} · {client.trainer_name}</small>
+                      </Link>
+                    </td>
+                    <td>
+                      {client.session_target != null
+                        ? `${client.completed_sessions} / ${client.session_target}`
+                        : client.completed_sessions}
+                    </td>
+                    <td>
+                      {client.sessions_remaining != null ? client.sessions_remaining : '—'}
+                    </td>
+                    <td className={client.amount_due > 0 ? 'pt-due-amount' : ''}>
+                      {formatCurrency(client.amount_due)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       <div className="card">
@@ -102,9 +176,7 @@ export default function PTDashboard() {
       <div className="card-title-row">
         <h3>Trainers</h3>
       </div>
-      {loading ? (
-        <p className="muted">Loading...</p>
-      ) : !trainers.length ? (
+      {!trainers.length ? (
         <p className="muted">No trainers yet.</p>
       ) : (
         <div className="booking-list">
@@ -122,50 +194,6 @@ export default function PTDashboard() {
           ))}
         </div>
       )}
-
-      <div className="card">
-        <div className="card-title-row">
-          <h3>PT Clients</h3>
-          <label>
-            Status
-            <select value={status} onChange={(e) => setStatus(e.target.value)}>
-              <option value="">All</option>
-              <option value="ACTIVE">Active</option>
-              <option value="COMPLETED">Completed</option>
-            </select>
-          </label>
-        </div>
-        {!clients.length ? (
-          <p className="muted">No PT clients found for this filter.</p>
-        ) : (
-          <div className="booking-list">
-            {clients.map((client) => (
-              <Link key={client.id} to={`/pt/clients/${client.id}`} className={`booking-card status-${client.status.toLowerCase()}`}>
-                <div className="card-top">
-                  <strong>{client.client_name}</strong>
-                  <span className={`badge ${client.status === 'COMPLETED' ? 'closed' : 'pending'}`}>{client.status}</span>
-                </div>
-                <div className="card-meta">
-                  <span>{client.trainer_name}</span>
-                  <span>{client.plan_label}</span>
-                  <span>{client.pt_goal_label}</span>
-                </div>
-                <div className="card-meta">
-                  <span>Ends {client.current_end_date}</span>
-                  <span>
-                    Sessions {client.completed_sessions}
-                    {client.session_target ? ` / ${client.session_target}` : ''}
-                  </span>
-                </div>
-                <div className="card-amounts">
-                  <span>Total {formatCurrency(client.total_amount)}</span>
-                  <span>Due {formatCurrency(client.amount_due)}</span>
-                </div>
-              </Link>
-            ))}
-          </div>
-        )}
-      </div>
     </div>
   );
 }

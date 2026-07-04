@@ -7,9 +7,18 @@ export const PT_GOAL_OPTIONS = [
 
 export const PT_PLAN_OPTIONS = [
   { value: '22_sessions', label: '22 Sessions PT' },
-  { value: '1_month', label: '1 Month PT' },
-  { value: '3_month', label: '3 Months PT' },
+  { value: '1_month', label: '1 Month PT (26 sessions)' },
+  { value: '3_month', label: '3 Months PT (78 sessions)' },
 ];
+
+export function targetSessionsForPlan(planType) {
+  switch (planType) {
+    case '22_sessions': return 22;
+    case '1_month': return 26;
+    case '3_month': return 78;
+    default: return null;
+  }
+}
 
 export const PT_FREEZE_REASON_OPTIONS = [
   { value: 'injury', label: 'Injury' },
@@ -36,13 +45,9 @@ export function addDaysISO(iso, days) {
   return toISO(date);
 }
 
-export function calcPtEndDate(startISO, planType, freezeDays = 0) {
-  if (!startISO || !planType) return '';
-  const months = planType === '3_month' ? 3 : 1;
-  const end = parseIsoDate(startISO);
-  end.setMonth(end.getMonth() + months);
-  end.setDate(end.getDate() - 1);
-  return addDaysISO(toISO(end), freezeDays);
+export function calcPtEndDate(startISO, _planType, freezeDays = 0) {
+  if (!startISO) return '';
+  return addDaysISO(startISO, 45 + Number(freezeDays || 0));
 }
 
 export function ptPlanLabel(planType) {

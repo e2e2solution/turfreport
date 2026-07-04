@@ -42,7 +42,7 @@ export default function PTTrainerDetail() {
 
   const computedEndDate = useMemo(
     () => calcPtEndDate(form.start_date, form.plan_type),
-    [form.start_date, form.plan_type],
+    [form.start_date],
   );
 
   const handleCreateClient = async (e) => {
@@ -93,7 +93,7 @@ export default function PTTrainerDetail() {
           <label>Start Date *
             <input type="date" value={form.start_date} onChange={(e) => set('start_date', e.target.value)} required />
           </label>
-          <label>End Date (auto)
+          <label>End Date (start + 45 days)
             <input type="date" value={computedEndDate} readOnly className="readonly" />
           </label>
           <label>Total Amount

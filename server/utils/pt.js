@@ -28,13 +28,9 @@ export function addDaysISO(iso, days) {
   return toISO(date);
 }
 
-export function calcPtBaseEndDate(startISO, planType) {
-  if (!startISO || !planType) return '';
-  const months = planType === '3_month' ? 3 : 1;
-  const end = parseIsoDate(startISO);
-  end.setMonth(end.getMonth() + months);
-  end.setDate(end.getDate() - 1);
-  return toISO(end);
+export function calcPtBaseEndDate(startISO, _planType) {
+  if (!startISO) return '';
+  return addDaysISO(startISO, 45);
 }
 
 export function freezeDaysBetween(fromISO, toISO) {
@@ -47,7 +43,12 @@ export function freezeDaysBetween(fromISO, toISO) {
 }
 
 export function targetSessionsForPlan(planType) {
-  return planType === '22_sessions' ? 22 : null;
+  switch (planType) {
+    case '22_sessions': return 22;
+    case '1_month': return 26;
+    case '3_month': return 78;
+    default: return null;
+  }
 }
 
 export function isValidPtPlanType(planType) {
@@ -70,9 +71,9 @@ export function goalLabel(goal) {
 
 export function planLabel(planType) {
   switch (planType) {
-    case '22_sessions': return '22 Sessions';
-    case '1_month': return '1 Month PT';
-    case '3_month': return '3 Months PT';
+    case '22_sessions': return '22 Sessions PT';
+    case '1_month': return '1 Month PT (26 sessions)';
+    case '3_month': return '3 Months PT (78 sessions)';
     default: return planType || '';
   }
 }

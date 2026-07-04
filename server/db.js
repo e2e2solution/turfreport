@@ -314,4 +314,30 @@ db.exec(`
   );
 `);
 
+db.exec(`
+  CREATE TABLE IF NOT EXISTS _app_migrations (
+    key TEXT PRIMARY KEY,
+    applied_at TEXT DEFAULT (datetime('now'))
+  );
+`);
+
+const ptEndDate45 = db.prepare("SELECT key FROM _app_migrations WHERE key = 'pt_clients_end_date_45'").get();
+if (!ptEndDate45) {
+  const result = db.prepare(`
+    UPDATE pt_clients
+    SET base_end_date = date(start_date, '+45 days')
+  `).run();
+  db.prepare("INSERT INTO _app_migrations (key) VALUES ('pt_clients_end_date_45')").run();
+  if (result.changes > 0) {
+    console.log(`PT clients: updated ${result.changes} end date(s) to start + 45 days`);
+  }
+}
+
+const ptManualReopenCol = db.prepare('PRAGMA table_info(pt_clients)').all()
+  .some((col) => col.name === 'manual_reopen');
+if (!ptManualReopenCol) {
+  db.exec('ALTER TABLE pt_clients ADD COLUMN manual_reopen INTEGER DEFAULT 0');
+  console.log('PT clients: added manual_reopen column for undo complete');
+}
+
 export default db;

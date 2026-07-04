@@ -2276,6 +2276,70 @@ textarea:focus {
   max-width: 100%;
 }
 
+.pt-client-panel {
+  margin-bottom: 1rem;
+}
+
+.pt-client-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.pt-client-filters label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+  color: #64748b;
+  min-width: 160px;
+}
+
+.pt-client-table-wrap {
+  overflow-x: auto;
+  margin-top: 0.5rem;
+}
+
+.pt-client-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.pt-client-table th,
+.pt-client-table td {
+  padding: 0.65rem 0.5rem;
+  text-align: left;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.pt-client-table th {
+  font-size: 0.8rem;
+  color: #64748b;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.pt-client-link {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  text-decoration: none;
+  color: inherit;
+}
+
+.pt-client-link small {
+  color: #64748b;
+  font-size: 0.78rem;
+}
+
+.pt-due-amount {
+  color: #dc2626;
+  font-weight: 600;
+}
+
 .pt-session-calendar {
   margin-top: 0.5rem;
 }

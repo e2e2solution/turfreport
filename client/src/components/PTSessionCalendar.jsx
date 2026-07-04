@@ -82,10 +82,12 @@ export default function PTSessionCalendar({
         </span>
       </div>
 
-      {planType === '22_sessions' && (
-        <p className="hint">Check up to 22 training days on the calendar. Uncheck to remove a session.</p>
+      {sessionTarget != null && (
+        <p className="hint">
+          Mark up to {sessionTarget} training days on the calendar. Uncheck to remove a session.
+        </p>
       )}
-      {planType !== '22_sessions' && (
+      {sessionTarget == null && (
         <p className="hint">Tap a day to mark PT done. Tap again to unmark.</p>
       )}
 

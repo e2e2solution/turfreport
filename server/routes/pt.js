@@ -61,6 +61,9 @@ function applyClientDerived(client, opts = {}) {
   const sessionTarget = targetSessionsForPlan(client.plan_type);
   const currentEndDate = addDaysISO(client.base_end_date, freezeDays);
   const amountPaid = paymentReceived(client);
+  const sessionsRemaining = sessionTarget != null
+    ? Math.max(0, sessionTarget - completedSessions)
+    : null;
 
   return {
     ...client,
@@ -68,6 +71,7 @@ function applyClientDerived(client, opts = {}) {
     plan_label: planLabel(client.plan_type),
     completed_sessions: completedSessions,
     session_target: sessionTarget,
+    sessions_remaining: sessionsRemaining,
     freeze_days: freezeDays,
     current_end_date: currentEndDate,
     amount_paid: amountPaid,
@@ -87,7 +91,7 @@ function syncClientCompletion(clientId) {
   const completedSessions = getSessionCount(client.id);
   const sessionTarget = targetSessionsForPlan(client.plan_type);
 
-  if (sessionTarget && completedSessions >= sessionTarget && client.status !== 'COMPLETED') {
+  if (sessionTarget && completedSessions >= sessionTarget && client.status !== 'COMPLETED' && !client.manual_reopen) {
     const lastSession = db.prepare(`
       SELECT session_date
       FROM pt_sessions
@@ -272,9 +276,25 @@ router.post('/clients/:id/complete', (req, res) => {
 
   db.prepare(`
     UPDATE pt_clients
-    SET status = 'COMPLETED', completed_at = ?
+    SET status = 'COMPLETED', completed_at = ?, manual_reopen = 0
     WHERE id = ?
   `).run(todayISO(), req.params.id);
+
+  res.json(getClientWithDetails(req.params.id));
+});
+
+router.post('/clients/:id/reopen', (req, res) => {
+  const existing = db.prepare('SELECT * FROM pt_clients WHERE id = ?').get(req.params.id);
+  if (!existing) return res.status(404).json({ error: 'PT client not found' });
+  if (existing.status !== 'COMPLETED') {
+    return res.status(400).json({ error: 'PT is not completed' });
+  }
+
+  db.prepare(`
+    UPDATE pt_clients
+    SET status = 'ACTIVE', completed_at = NULL, manual_reopen = 1
+    WHERE id = ?
+  `).run(req.params.id);
 
   res.json(getClientWithDetails(req.params.id));
 });

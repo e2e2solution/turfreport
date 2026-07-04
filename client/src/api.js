@@ -288,6 +288,10 @@ export async function markPtComplete(id) {
   return request(`${API_PT}/clients/${id}/complete`, { method: 'POST' });
 }
 
+export async function undoPtComplete(id) {
+  return request(`${API_PT}/clients/${id}/reopen`, { method: 'POST' });
+}
+
 export async function addPtSession(id, data) {
   return request(`${API_PT}/clients/${id}/sessions`, {
     method: 'POST',

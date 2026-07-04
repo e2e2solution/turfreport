@@ -9,6 +9,7 @@ import {
   formatCurrency,
   formatDateDMY,
   markPtComplete,
+  undoPtComplete,
   todayISO,
   updatePtClientPayment,
 } from '../api';
@@ -154,6 +155,19 @@ export default function PTClientDetail() {
     }
   };
 
+  const handleUndoComplete = async () => {
+    if (!confirm('Undo completion? Session checkboxes will be editable again.')) return;
+    setSaving(true);
+    try {
+      const updated = await undoPtComplete(id);
+      setClient(updated);
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   if (loading) return <div className="page"><p className="muted">Loading...</p></div>;
   if (!client) return <div className="page"><p className="alert error">PT client not found</p></div>;
 
@@ -202,9 +216,13 @@ export default function PTClientDetail() {
 
           {client.notes && <p className="remarks" style={{ marginTop: 12 }}>{client.notes}</p>}
 
-          {client.status !== 'COMPLETED' && (
+          {client.status !== 'COMPLETED' ? (
             <button type="button" className="btn primary" onClick={handleComplete} disabled={saving}>
               Mark PT Complete
+            </button>
+          ) : (
+            <button type="button" className="btn" onClick={handleUndoComplete} disabled={saving}>
+              Undo Complete
             </button>
           )}
         </div>
@@ -212,7 +230,14 @@ export default function PTClientDetail() {
 
       {tab === 'sessions' && (
         <div className="card">
-          <h3>Session Calendar</h3>
+          <div className="card-title-row">
+            <h3>Session Calendar</h3>
+            {client.status === 'COMPLETED' && (
+              <button type="button" className="btn small" onClick={handleUndoComplete} disabled={saving}>
+                Undo Complete
+              </button>
+            )}
+          </div>
           <p className="hint">
             {formatDateDMY(client.start_date)} to {formatDateDMY(client.current_end_date)}
             {saving && ' · Saving...'}
@@ -228,6 +253,11 @@ export default function PTClientDetail() {
             saving={saving}
             onToggle={handleToggleSession}
           />
+          {client.status === 'COMPLETED' && (
+            <p className="hint" style={{ marginTop: 12 }}>
+              Sessions are locked while PT is completed. Use <strong>Undo Complete</strong> on the Overview tab to edit again.
+            </p>
+          )}
         </div>
       )}
 
