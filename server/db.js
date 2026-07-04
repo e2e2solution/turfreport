@@ -303,6 +303,15 @@ db.exec(`
     data TEXT NOT NULL,
     uploaded_at TEXT DEFAULT (datetime('now'))
   );
+
+  CREATE TABLE IF NOT EXISTS customer_reviews (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    customer_name TEXT DEFAULT '',
+    happiness INTEGER NOT NULL CHECK(happiness BETWEEN 1 AND 5),
+    comment TEXT NOT NULL,
+    read_by_owner INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now'))
+  );
 `);
 
 export default db;

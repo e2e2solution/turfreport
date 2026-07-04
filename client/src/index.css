@@ -66,6 +66,43 @@ html, body, #root {
   gap: 12px;
 }
 
+.header-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1;
+}
+
+.header-brand h1 {
+  font-size: 1.05rem;
+  line-height: 1.2;
+  text-align: left;
+}
+
+.app-logo {
+  display: block;
+  object-fit: contain;
+}
+
+.app-logo-header {
+  height: 38px;
+  width: auto;
+  flex-shrink: 0;
+}
+
+.app-logo-login {
+  height: 96px;
+  width: auto;
+  margin: 0 auto 12px;
+}
+
+.app-logo-owner {
+  height: 52px;
+  width: auto;
+  margin: 0 auto 0.35rem;
+}
+
 .header-user {
   font-size: 0.8rem;
   opacity: 0.9;
@@ -224,6 +261,27 @@ html, body, #root {
   border-bottom: 1px solid rgba(255, 255, 255, 0.2);
 }
 
+.total-row-anim {
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.total-row-anim .sport-mini-anim {
+  position: static;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.total-row-anim .sport-mini-gym {
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.total-row-anim span {
+  flex: 1;
+}
+
 .total-row.grand {
   border-bottom: none;
   font-size: 1.2rem;
@@ -276,6 +334,15 @@ html, body, #root {
 .cafe-action-card {
   border: 2px solid #92400e;
   background: linear-gradient(135deg, #fffbeb, #fef3c7);
+}
+
+.customer-feedback-action {
+  width: 100%;
+  border: 2px solid #2b6cb0;
+  background: linear-gradient(135deg, #ebf8ff, #bee3f8);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
 }
 
 .action-icon {
@@ -997,17 +1064,24 @@ textarea:focus {
   align-items: center;
   justify-content: center;
   position: relative;
-  padding: 1rem 1rem 0.85rem;
+  padding:
+    calc(max(36px, env(safe-area-inset-top, 0px)) + 0.5rem)
+    max(1rem, env(safe-area-inset-right, 0px))
+    0.85rem
+    max(1rem, env(safe-area-inset-left, 0px));
   text-align: center;
   border-bottom: 1px solid rgba(255, 255, 255, 0.15);
-  background: rgba(0, 0, 0, 0.12);
+  background: rgba(15, 23, 42, 0.92);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
 }
 
 .owner-brand-title h1 {
   margin: 0;
-  font-size: 1.35rem;
+  font-size: 1.2rem;
   font-weight: 700;
   letter-spacing: 0.02em;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
 }
 
 .owner-brand-sub {
@@ -1018,11 +1092,514 @@ textarea:focus {
 
 .owner-brand-actions {
   position: absolute;
-  right: 0.75rem;
-  top: 50%;
+  right: max(0.75rem, env(safe-area-inset-right, 0px));
+  top: calc(max(36px, env(safe-area-inset-top, 0px)) + 50%);
   transform: translateY(-50%);
   display: flex;
+  align-items: center;
   gap: 0.45rem;
+}
+
+.owner-notif-btn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+  cursor: pointer;
+  color: inherit;
+}
+
+.owner-notif-btn.has-notif {
+  animation: owner-notif-blink 1.2s ease-in-out infinite;
+}
+
+.owner-notif-icon {
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+.owner-notif-dot {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #f56565;
+  box-shadow: 0 0 6px rgba(245, 101, 101, 0.8);
+}
+
+.owner-notif-count {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: #e53e3e;
+  color: #fff;
+  font-size: 0.62rem;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+  box-shadow: 0 0 6px rgba(229, 62, 62, 0.7);
+}
+
+@keyframes owner-notif-blink {
+  0%, 100% {
+    background: rgba(255, 255, 255, 0.12);
+    transform: scale(1);
+  }
+  50% {
+    background: rgba(251, 191, 36, 0.45);
+    transform: scale(1.08);
+    box-shadow: 0 0 14px rgba(251, 191, 36, 0.55);
+  }
+}
+
+.owner-notif-banner {
+  position: fixed;
+  top: calc(max(36px, env(safe-area-inset-top, 0px)) + 4.75rem);
+  left: max(0.65rem, env(safe-area-inset-left, 0px));
+  right: max(0.65rem, env(safe-area-inset-right, 0px));
+  z-index: 180;
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.97);
+  color: #1a202c;
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.28), 0 0 0 1px rgba(0, 0, 0, 0.06);
+  overflow: hidden;
+  animation: owner-notif-banner-in 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.owner-notif-banner-body {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.85rem 0.65rem 0.85rem 0.85rem;
+  border: none;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+}
+
+.owner-notif-banner-app-icon {
+  flex-shrink: 0;
+  width: 2.25rem;
+  height: 2.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #1a365d, #2c5282);
+  color: #fff;
+  font-size: 0.85rem;
+  font-weight: 800;
+}
+
+.owner-notif-banner-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.owner-notif-banner-app {
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #718096;
+}
+
+.owner-notif-banner-text strong {
+  font-size: 0.92rem;
+  line-height: 1.3;
+  color: #1a365d;
+}
+
+.owner-notif-banner-text small {
+  font-size: 0.78rem;
+  color: #4a5568;
+}
+
+.owner-notif-banner-dismiss {
+  flex-shrink: 0;
+  width: 2.5rem;
+  border: none;
+  border-left: 1px solid #e2e8f0;
+  background: transparent;
+  color: #718096;
+  font-size: 1.25rem;
+  cursor: pointer;
+}
+
+@keyframes owner-notif-banner-in {
+  from {
+    opacity: 0;
+    transform: translateY(-110%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.owner-review-greeting {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #fefcbf;
+}
+
+.owner-review-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem;
+  background: rgba(15, 23, 42, 0.72);
+  backdrop-filter: blur(4px);
+}
+
+.owner-review-popup {
+  position: relative;
+  width: 100%;
+  max-width: 360px;
+  padding: 1.75rem 1.25rem 1.25rem;
+  border-radius: 16px;
+  background: linear-gradient(160deg, #1a365d 0%, #2c5282 100%);
+  color: #fff;
+  text-align: center;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.35);
+}
+
+.owner-review-close {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.65rem;
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.owner-review-smile-wrap {
+  margin: 0.5rem 0 0.25rem;
+}
+
+.owner-review-smile {
+  display: inline-block;
+  font-size: 4rem;
+  line-height: 1;
+  animation: owner-smile-bob 1.8s ease-in-out infinite;
+  filter: drop-shadow(0 0 12px rgba(255, 255, 255, 0.45));
+}
+
+.owner-review-happiness {
+  margin: 0 0 0.75rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.owner-review-title {
+  margin: 0 0 0.75rem;
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.owner-review-comment {
+  margin: 0 0 1.25rem;
+  padding: 0.85rem 1rem;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.1);
+  font-size: 1rem;
+  line-height: 1.5;
+  font-style: italic;
+  text-align: left;
+}
+
+.owner-review-done {
+  width: 100%;
+}
+
+.owner-review-list-popup {
+  max-height: min(82vh, 640px);
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+}
+
+.owner-review-list-badge {
+  display: inline-block;
+  margin-left: 0.45rem;
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+  background: rgba(251, 191, 36, 0.25);
+  color: #fefcbf;
+  font-size: 0.72rem;
+  font-weight: 600;
+  vertical-align: middle;
+}
+
+.owner-review-list-loading,
+.owner-review-list-empty {
+  margin: 0.5rem 0 1rem;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 0.92rem;
+}
+
+.owner-review-list {
+  list-style: none;
+  margin: 0 0 1rem;
+  padding: 0;
+  overflow-y: auto;
+  flex: 1;
+  max-height: 52vh;
+}
+
+.owner-review-list-item {
+  margin-bottom: 0.75rem;
+  padding: 0.85rem;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.owner-review-list-item.unread {
+  border-color: rgba(251, 191, 36, 0.45);
+  background: rgba(251, 191, 36, 0.1);
+}
+
+.owner-review-list-item-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  margin-bottom: 0.5rem;
+}
+
+.owner-review-list-emoji {
+  font-size: 1.75rem;
+  line-height: 1;
+}
+
+.owner-review-list-meta {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.owner-review-list-meta strong {
+  font-size: 0.95rem;
+}
+
+.owner-review-list-meta span {
+  font-size: 0.78rem;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.owner-review-list-meta small {
+  font-size: 0.72rem;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.owner-review-list-new-dot {
+  width: 8px;
+  height: 8px;
+  margin-top: 0.35rem;
+  border-radius: 50%;
+  background: #f6e05e;
+  flex-shrink: 0;
+}
+
+.owner-review-list-comment {
+  margin: 0;
+  padding: 0;
+  font-size: 0.92rem;
+  line-height: 1.45;
+  font-style: italic;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.owner-review-list-read-btn {
+  margin-top: 0.55rem;
+}
+
+.customer-review-card h3 {
+  margin-top: 0;
+}
+
+.customer-review-open {
+  flex: 1;
+}
+
+.customer-review-open-row {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.customer-review-open-row .btn.small {
+  white-space: nowrap;
+}
+
+.customer-review-form label,
+.customer-review-form fieldset {
+  display: block;
+  margin-bottom: 0.85rem;
+}
+
+.customer-review-form fieldset {
+  border: none;
+  padding: 0;
+  margin-left: 0;
+  margin-right: 0;
+}
+
+.happiness-picker legend {
+  font-size: 0.9rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.happiness-options {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.35rem;
+}
+
+.happiness-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0.45rem 0.2rem;
+  border: 2px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fff;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.happiness-btn.active {
+  border-color: #3182ce;
+  background: #ebf8ff;
+}
+
+.happiness-emoji {
+  font-size: 1.35rem;
+  line-height: 1;
+}
+
+.happiness-label {
+  font-size: 0.62rem;
+  color: #64748b;
+  line-height: 1.1;
+}
+
+.customer-review-form textarea {
+  width: 100%;
+  resize: vertical;
+  min-height: 72px;
+}
+
+.customer-review-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.app-toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+  z-index: 300;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  max-width: min(92vw, 360px);
+  padding: 0.85rem 1rem;
+  border-radius: 12px;
+  color: #fff;
+  font-size: 0.92rem;
+  font-weight: 500;
+  line-height: 1.35;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.22);
+  transform: translateX(-50%);
+  animation: app-toast-in 0.28s ease-out;
+}
+
+.app-toast-success {
+  background: linear-gradient(135deg, #276749, #38a169);
+}
+
+.app-toast-error {
+  background: linear-gradient(135deg, #9b2c2c, #e53e3e);
+}
+
+.app-toast-icon {
+  flex-shrink: 0;
+  width: 1.35rem;
+  height: 1.35rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+@keyframes app-toast-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-toast {
+    animation: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .owner-notif-btn.has-notif,
+  .owner-review-smile {
+    animation: none;
+  }
+
+  .owner-notif-banner {
+    animation: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .happiness-label {
+    display: none;
+  }
 }
 
 .owner-login-wrap {
@@ -1051,7 +1628,7 @@ textarea:focus {
   width: 100%;
   max-width: 480px;
   margin: 0 auto;
-  padding-bottom: 5rem;
+  padding-bottom: calc(5rem + env(safe-area-inset-bottom, 0px));
 }
 
 .owner-logout-btn {
@@ -1094,16 +1671,141 @@ textarea:focus {
   padding: 0 1rem;
 }
 
+.owner-smile-loader {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  padding: 2.5rem 1.5rem 3rem;
+  text-align: center;
+}
+
+.owner-smile-face {
+  position: relative;
+  width: 88px;
+  height: 88px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.owner-smile-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  animation: owner-smile-ring 2s ease-in-out infinite;
+}
+
+.owner-smile-ring::before {
+  content: '';
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  animation: owner-smile-ring 2s ease-in-out infinite 0.4s;
+}
+
+.owner-smile-emoji {
+  font-size: 2.75rem;
+  line-height: 1;
+  filter: drop-shadow(0 0 12px rgba(255, 255, 255, 0.55));
+  animation: owner-smile-bob 1.8s ease-in-out infinite;
+}
+
+.owner-smile-quote {
+  margin: 0;
+  max-width: 280px;
+  font-size: 0.95rem;
+  font-weight: 500;
+  line-height: 1.45;
+  color: #fff;
+  opacity: 0.95;
+  animation: owner-smile-quote 2.4s ease-in-out infinite;
+}
+
+.owner-smile-label {
+  margin: 0;
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.65);
+}
+
+@keyframes owner-smile-ring {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.45;
+    box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.25);
+  }
+  50% {
+    transform: scale(1.08);
+    opacity: 1;
+    box-shadow: 0 0 24px 4px rgba(255, 255, 255, 0.2);
+  }
+}
+
+@keyframes owner-smile-bob {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-6px) scale(1.06); }
+}
+
+@keyframes owner-smile-quote {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .owner-smile-ring,
+  .owner-smile-ring::before,
+  .owner-smile-emoji,
+  .owner-smile-quote {
+    animation: none;
+  }
+}
+
+.owner-day-scroll-wrap {
+  position: relative;
+}
+
+.owner-day-scroll-wrap.has-scroll::before,
+.owner-day-scroll-wrap.has-scroll::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 28px;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.owner-day-scroll-wrap.has-scroll::before {
+  left: 0;
+  background: linear-gradient(to right, rgba(26, 54, 93, 0.95), transparent);
+}
+
+.owner-day-scroll-wrap.has-scroll::after {
+  right: 0;
+  background: linear-gradient(to left, rgba(26, 54, 93, 0.95), transparent);
+}
+
 .owner-day-scroll {
   display: flex;
   gap: 0.5rem;
   overflow-x: auto;
   padding: 0.5rem 1rem 1rem;
   -webkit-overflow-scrolling: touch;
+  scroll-snap-type: x proximity;
+  scrollbar-width: none;
+}
+
+.owner-day-scroll::-webkit-scrollbar {
+  display: none;
 }
 
 .owner-day-chip {
   flex: 0 0 auto;
+  scroll-snap-align: center;
+  min-width: 104px;
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
@@ -1123,7 +1825,13 @@ textarea:focus {
 }
 
 .owner-day-chip strong {
-  font-size: 0.95rem;
+  font-size: 0.9rem;
+  white-space: nowrap;
+}
+
+.owner-day-chip span {
+  font-size: 0.8rem;
+  white-space: nowrap;
 }
 
 .owner-hero {
@@ -1134,6 +1842,14 @@ textarea:focus {
   text-align: center;
 }
 
+.owner-hero.owner-hero-cafe,
+.owner-hero.owner-hero-daily {
+  padding: 0;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+
 .owner-hero strong {
   display: block;
   font-size: 2rem;
@@ -1142,6 +1858,54 @@ textarea:focus {
 
 .owner-hero small {
   opacity: 0.85;
+}
+
+.owner-hero-cafe,
+.owner-hero-daily {
+  position: relative;
+  overflow: hidden;
+}
+
+.owner-hero-wave-wrap {
+  position: relative;
+  width: 100%;
+  min-height: 128px;
+  padding-bottom: 2.5rem;
+}
+
+.owner-hero-wave-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.owner-hero-boat-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.owner-hero-cafe-content,
+.owner-hero-wave-content {
+  position: relative;
+  z-index: 2;
+  will-change: transform;
+  padding: 1rem 1rem 0;
+}
+
+.owner-hero-cafe-content span,
+.owner-hero-cafe-content strong,
+.owner-hero-cafe-content small,
+.owner-hero-wave-content span,
+.owner-hero-wave-content strong,
+.owner-hero-wave-content small {
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.25);
 }
 
 .owner-card {
@@ -1227,11 +1991,6 @@ textarea:focus {
   margin: 1rem auto 0;
   padding: 0.65rem 1.25rem;
 }
-
-.owner-day-chip {
-  padding: 0.75rem 1rem;
-}
-
 .btn.owner-install-btn {
   width: 100%;
   margin-top: 12px;
@@ -1263,10 +2022,116 @@ textarea:focus {
 }
 
 .owner-highlight {
-  padding: 0.65rem 0.75rem;
+  position: relative;
+  padding: 1.65rem 0.75rem 0.65rem;
   border-radius: 10px;
   text-align: center;
   color: #fff;
+  overflow: hidden;
+}
+
+.sport-mini-anim {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 40px;
+  height: 40px;
+  color: rgba(255, 255, 255, 0.92);
+  pointer-events: none;
+}
+
+.sport-mini-gym {
+  color: rgba(26, 32, 44, 0.85);
+}
+
+.sport-mini-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* Turf — kick + rolling ball */
+.sport-kick-leg {
+  transform-origin: 22px 25px;
+  animation: sport-kick 1.1s ease-in-out infinite;
+}
+
+.sport-turf-ball {
+  animation: sport-ball-roll 1.1s ease-in-out infinite;
+}
+
+@keyframes sport-kick {
+  0%, 100% { transform: rotate(0deg); }
+  35% { transform: rotate(-28deg); }
+  55% { transform: rotate(-12deg); }
+}
+
+@keyframes sport-ball-roll {
+  0%, 100% { transform: translate(0, 0); }
+  50% { transform: translate(4px, -3px); }
+}
+
+/* Badminton — racket swing + shuttle */
+.sport-racket-arm {
+  transform-origin: 20px 18px;
+  animation: sport-racket 0.9s ease-in-out infinite;
+}
+
+.sport-shuttle {
+  animation: sport-shuttle-fly 0.9s ease-in-out infinite;
+}
+
+@keyframes sport-racket {
+  0%, 100% { transform: rotate(0deg); }
+  45% { transform: rotate(-35deg); }
+}
+
+@keyframes sport-shuttle-fly {
+  0%, 100% { transform: translate(0, 0); opacity: 1; }
+  50% { transform: translate(3px, -6px); opacity: 0.7; }
+}
+
+/* Gym — dumbbell curl (loops always) */
+.sport-curl-arm {
+  transform-origin: 22px 18px;
+  animation: sport-curl 1.2s ease-in-out infinite;
+}
+
+@keyframes sport-curl {
+  0%, 100% { transform: rotate(0deg); }
+  45% { transform: rotate(-55deg); }
+}
+
+/* Football coaching — kick */
+.sport-coach-kick {
+  transform-origin: 21px 26px;
+  animation: sport-coach-kick 1.15s ease-in-out infinite;
+}
+
+.sport-coach-ball {
+  animation: sport-coach-ball 1.15s ease-in-out infinite;
+}
+
+@keyframes sport-coach-kick {
+  0%, 100% { transform: rotate(0deg); }
+  40% { transform: rotate(-32deg); }
+}
+
+@keyframes sport-coach-ball {
+  0%, 100% { transform: translate(0, 0); }
+  50% { transform: translate(5px, -4px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sport-kick-leg,
+  .sport-turf-ball,
+  .sport-racket-arm,
+  .sport-shuttle,
+  .sport-curl-arm,
+  .sport-coach-kick,
+  .sport-coach-ball {
+    animation: none;
+  }
 }
 
 .owner-highlight span {

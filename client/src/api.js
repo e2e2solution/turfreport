@@ -11,6 +11,7 @@ const API_REPORT = `${API_ROOT}/api/report`;
 const API_SUMMARY = `${API_ROOT}/api/summary`;
 const API_PT = `${API_ROOT}/api/pt`;
 const API_CAFE = `${API_ROOT}/api/cafe`;
+const API_REVIEWS = `${API_ROOT}/api/reviews`;
 const API_OWNER = `${API_ROOT}/api/owner`;
 
 function authHeaders(extra = {}) {
@@ -344,6 +345,18 @@ export async function pushCafeToOwner(month) {
   });
 }
 
+export async function createCustomerReview(data) {
+  return request(API_REVIEWS, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+}
+
+export async function syncPendingReviews() {
+  return request(`${API_REVIEWS}/sync-pending`, { method: 'POST' });
+}
+
 export function todayISO() {
   return new Date().toISOString().split('T')[0];
 }
@@ -515,5 +528,95 @@ export async function fetchOwnerCafeReport(month) {
     const legacy = await fetchOwnerReport(`cafe-${month}`);
     if (legacy?.month_key || legacy?.report_type === 'cafe') return legacy;
     throw err;
+  }
+}
+
+const OWNER_DISMISSED_REVIEWS_KEY = 'vsh_owner_dismissed_reviews';
+
+function getDismissedReviewIds() {
+  try {
+    return JSON.parse(localStorage.getItem(OWNER_DISMISSED_REVIEWS_KEY) || '[]');
+  } catch {
+    return [];
+  }
+}
+
+function dismissReviewLocally(reviewId) {
+  const ids = getDismissedReviewIds();
+  if (!ids.includes(reviewId)) {
+    localStorage.setItem(OWNER_DISMISSED_REVIEWS_KEY, JSON.stringify([...ids, reviewId]));
+  }
+}
+
+function legacyReportToReview(doc) {
+  if (!doc) return null;
+  const id = doc.review_id || Number(String(doc.payment_date || '').replace(/^review-/, ''));
+  if (!id || !doc.comment) return null;
+  return {
+    review_id: id,
+    customer_name: doc.customer_name || '',
+    happiness: doc.happiness || 5,
+    comment: doc.comment,
+    read_by_owner: Boolean(doc.read_by_owner),
+    created_at: doc.created_at,
+  };
+}
+
+function isLegacyReviewReport(doc) {
+  return String(doc?.payment_date || '').startsWith('review-')
+    || doc?.report_type === 'customer_review';
+}
+
+async function fetchOwnerReviewsLegacy() {
+  const rows = await ownerRequest(`${ownerApi('/reports')}?limit=60`);
+  return (rows || [])
+    .filter(isLegacyReviewReport)
+    .map(legacyReportToReview)
+    .filter(Boolean)
+    .sort((a, b) => String(b.created_at || b.review_id).localeCompare(String(a.created_at || a.review_id)));
+}
+
+async function fetchOwnerLatestReviewLegacy() {
+  const dismissed = getDismissedReviewIds();
+  const rows = await fetchOwnerReviewsLegacy();
+  const unread = rows
+    .filter((r) => !r.read_by_owner)
+    .filter((r) => !dismissed.includes(r.review_id));
+  return unread[0] || null;
+}
+
+export async function fetchOwnerReviews() {
+  try {
+    return await ownerRequest(`${ownerApi('/reviews')}?limit=50`);
+  } catch {
+    return fetchOwnerReviewsLegacy();
+  }
+}
+
+export function countUnreadOwnerReviews(reviews) {
+  const dismissed = getDismissedReviewIds();
+  return (reviews || []).filter(
+    (r) => !r.read_by_owner && !dismissed.includes(r.review_id),
+  ).length;
+}
+
+export async function fetchOwnerLatestReview() {
+  try {
+    const review = await ownerRequest(ownerApi('/reviews/latest'));
+    if (!review?.review_id && !isLegacyReviewReport(review)) return null;
+    const normalized = review?.review_id ? review : legacyReportToReview(review);
+    if (!normalized) return null;
+    if (getDismissedReviewIds().includes(normalized.review_id)) return null;
+    return normalized;
+  } catch {
+    return fetchOwnerLatestReviewLegacy();
+  }
+}
+
+export async function markOwnerReviewRead(reviewId) {
+  try {
+    await ownerRequest(ownerApi(`/reviews/${reviewId}/read`), { method: 'POST' });
+  } catch {
+    dismissReviewLocally(reviewId);
   }
 }

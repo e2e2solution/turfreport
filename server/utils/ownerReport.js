@@ -51,7 +51,7 @@ function buildPaymentReport(paymentDate) {
   }));
 
   const football_coaching = data.football_coaching.map((r) => ({
-    child_name: r.child_name,
+    child_name: r.name,
     parent_name: r.parent_name,
     coaching_month: r.coaching_month,
     period: r.period,

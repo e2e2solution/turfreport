@@ -8,6 +8,9 @@ import {
   getCachedCafeReport, setCachedCafeReport,
   getCachedCafeSelectedMonth, setCachedCafeSelectedMonth,
 } from '../utils/ownerCafeCache';
+import { cafeYearValueRange } from '../utils/waveValueScore';
+import OwnerHeroWave from './OwnerHeroWave';
+import OwnerSmileLoader from './OwnerSmileLoader';
 
 const COLORS = ['#4472c4', '#92d050', '#f4b084', '#ed7d31', '#7030a0', '#c55a11', '#5b9bd5', '#ffc000'];
 const CAFE_AXIS_TICK = { fill: '#1a202c' };
@@ -112,9 +115,12 @@ export default function OwnerCafeView() {
   const topRevenue = analysis?.top_by_revenue?.slice(0, 8) || [];
   const topQty = analysis?.top_by_qty?.slice(0, 8) || [];
   const bottomRevenue = analysis?.bottom_by_revenue?.slice(0, 5) || [];
+  const cafeRange = report && selectedMonth
+    ? cafeYearValueRange(months, selectedMonth, report.grand_total)
+    : { min: 0, max: 0 };
 
   if (loading && !report) {
-    return <p className="muted owner-pad">Loading cafe report...</p>;
+    return <OwnerSmileLoader label="Loading cafe report..." />;
   }
 
   if (!months.length && !error) {
@@ -163,10 +169,17 @@ export default function OwnerCafeView() {
 
       {report && (
         <>
-          <div className="owner-hero">
-            <span>Cafe Revenue</span>
-            <strong>{formatCurrency(report.grand_total)}</strong>
-            <small>{report.label} · {report.business_name || 'Cafe'}</small>
+          <div className="owner-hero owner-hero-cafe">
+            <OwnerHeroWave
+              variant="cafe"
+              value={report.grand_total}
+              minValue={cafeRange.min}
+              maxValue={cafeRange.max}
+            >
+              <span>Cafe Revenue</span>
+              <strong>{formatCurrency(report.grand_total)}</strong>
+              <small>{report.label} · {report.business_name || 'Cafe'}</small>
+            </OwnerHeroWave>
           </div>
 
           <div className="owner-highlight-grid">

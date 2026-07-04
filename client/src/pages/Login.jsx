@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import AppLogo from '../components/AppLogo';
 
 export default function Login() {
   const { login, isAuthenticated, loading: authLoading } = useAuth();
@@ -30,6 +31,7 @@ export default function Login() {
   return (
     <div className="login-page">
       <div className="login-card">
+        <AppLogo className="app-logo-login" />
         <h1>Vathiyayath Sports Hub</h1>
         <p className="login-sub">Sign in to continue</p>
         <form onSubmit={handleSubmit}>

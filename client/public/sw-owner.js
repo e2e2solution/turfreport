@@ -1,5 +1,5 @@
 const CACHE = 'vsh-owner-v1';
-const SHELL = ['/owner.html', '/icons/owner-icon.svg', '/owner-manifest.webmanifest'];
+const SHELL = ['/owner.html', '/icons/vsh-logo.png', '/owner-manifest.webmanifest'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(

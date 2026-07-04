@@ -3,7 +3,7 @@ import { authMiddleware } from '../middleware/auth.js';
 import {
   verifyOwnerPin, signOwnerToken, ownerAuthMiddleware,
 } from '../middleware/ownerAuth.js';
-import { syncReportToMongo, isMongoReady, getMongoError, syncCafeToMongo, listCafeMonthsFromMongo, getCafeReportFromMongo } from '../db/mongo.js';
+import { syncReportToMongo, isMongoReady, getMongoError, syncCafeToMongo, listCafeMonthsFromMongo, getCafeReportFromMongo, syncReviewToMongo, getLatestUnreadReviewFromMongo, markReviewReadInMongo, listReviewsFromMongo } from '../db/mongo.js';
 import { buildOwnerReportSnapshot } from '../utils/ownerReport.js';
 import { saveOwnerReport } from '../utils/ownerStore.js';
 import {
@@ -11,6 +11,8 @@ import {
 } from '../utils/ownerStoreAsync.js';
 import { pushReportToCloud } from '../utils/cloudSync.js';
 import { getCafeReportFromSqlite, listCafeMonthsFromSqlite } from '../utils/cafeStore.js';
+import { getLatestUnreadReview, markReviewRead, reviewToSnapshot, listAllReviews } from '../utils/reviewStore.js';
+import { legacyReportToReview, isLegacyReviewReport } from '../utils/reviewLegacy.js';
 
 const router = Router();
 
@@ -28,6 +30,20 @@ router.post('/sync', async (req, res) => {
     return res.status(401).json({ error: 'Invalid sync key' });
   }
   const snapshot = req.body;
+
+  const isReview = snapshot?.report_type === 'review'
+    || (snapshot?.review_id && snapshot?.comment);
+
+  if (isReview) {
+    const mongo = await syncReviewToMongo({
+      ...snapshot,
+      read_by_owner: Boolean(snapshot.read_by_owner),
+    });
+    if (!mongo.ok) {
+      return res.status(503).json({ error: mongo.error || 'MongoDB unavailable' });
+    }
+    return res.json({ success: true, mongo_synced: true, review_id: snapshot.review_id, type: 'review' });
+  }
 
   const isCafe = snapshot?.report_type === 'cafe'
     || snapshot?.month_key
@@ -77,6 +93,26 @@ router.post('/sync-cafe', async (req, res) => {
     return res.status(503).json({ error: mongo.error || 'MongoDB unavailable' });
   }
   res.json({ success: true, mongo_synced: true, month_key: snapshot.month_key });
+});
+
+router.post('/sync-review', async (req, res) => {
+  const key = req.headers['x-sync-key'];
+  if (!process.env.OWNER_SYNC_KEY || key !== process.env.OWNER_SYNC_KEY) {
+    return res.status(401).json({ error: 'Invalid sync key' });
+  }
+  const review = req.body;
+  if (!review?.review_id || !review?.comment) {
+    return res.status(400).json({ error: 'Invalid review payload' });
+  }
+
+  const mongo = await syncReviewToMongo({
+    ...review,
+    read_by_owner: Boolean(review.read_by_owner),
+  });
+  if (!mongo.ok) {
+    return res.status(503).json({ error: mongo.error || 'MongoDB unavailable' });
+  }
+  res.json({ success: true, mongo_synced: true, review_id: review.review_id });
 });
 
 router.post('/push', authMiddleware, async (req, res) => {
@@ -175,6 +211,45 @@ router.get('/cafe/report', ownerAuthMiddleware, async (req, res) => {
   const report = getCafeReportFromSqlite(month);
   if (!report) return res.status(404).json({ error: 'No cafe report for this month' });
   res.json(report);
+});
+
+router.get('/reviews/latest', ownerAuthMiddleware, async (_req, res) => {
+  const mongoReview = await getLatestUnreadReviewFromMongo();
+  if (mongoReview) return res.json(mongoReview);
+
+  const local = getLatestUnreadReview();
+  if (local) return res.json(reviewToSnapshot(local));
+
+  res.json(null);
+});
+
+router.get('/reviews', ownerAuthMiddleware, async (req, res) => {
+  const limit = Math.min(Number(req.query.limit) || 50, 100);
+  const mongoRows = await listReviewsFromMongo(limit);
+  if (mongoRows?.length) return res.json(mongoRows);
+
+  const legacyReports = (await listOwnerReportsAsync(limit))
+    .filter(isLegacyReviewReport)
+    .map(legacyReportToReview)
+    .filter(Boolean);
+
+  if (legacyReports.length) {
+    return res.json(legacyReports.sort(
+      (a, b) => String(b.created_at || b.review_id).localeCompare(String(a.created_at || a.review_id)),
+    ));
+  }
+
+  res.json(listAllReviews(limit).map(reviewToSnapshot));
+});
+
+router.post('/reviews/:id/read', ownerAuthMiddleware, async (req, res) => {
+  const reviewId = Number(req.params.id);
+  if (!reviewId) return res.status(400).json({ error: 'Invalid review id' });
+
+  await markReviewReadInMongo(reviewId);
+  markReviewRead(reviewId);
+
+  res.json({ success: true });
 });
 
 export default router;

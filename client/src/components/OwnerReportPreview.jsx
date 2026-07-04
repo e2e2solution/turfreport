@@ -41,7 +41,7 @@ export default function OwnerReportPreview({ report, exportRef }) {
     ]);
 
   const coachingRows = (pr.football_coaching || []).map((r) => [
-    r.child_name,
+    r.child_name || r.name || '—',
     r.parent_name || '—',
     formatCoachingMonth(r.coaching_month),
     coachingPeriodLabel(r.period),

@@ -1,6 +1,6 @@
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-
+import AppLogo from './AppLogo';
 const links = [
   { to: '/', label: 'Home', icon: '🏠' },
   { to: '/add', label: 'Add', icon: '➕' },
@@ -16,7 +16,10 @@ export default function Layout({ children }) {
     <div className="app">
       <header className="header">
         <div className="header-row">
-          <h1>Vathiyayath Sports Hub</h1>
+          <div className="header-brand">
+            <AppLogo className="app-logo-header" />
+            <h1>Vathiyayath Sports Hub</h1>
+          </div>
           <button type="button" className="btn-logout" onClick={logout} title="Logout">
             Logout
           </button>

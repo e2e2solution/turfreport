@@ -5,11 +5,19 @@ import {
 import {
   ownerLogin, fetchOwnerReports, getOwnerToken, setOwnerToken, clearOwnerToken,
   formatCurrency, formatDateDMY, getOwnerApiBase, setOwnerApiBase, ownerHealthCheck,
-  isOwnerDailyReport,
+  isOwnerDailyReport, markOwnerReviewRead,
+  fetchOwnerReviews, countUnreadOwnerReviews,
 } from '../api';
 import OwnerReportPreview from '../components/OwnerReportPreview';
 import OwnerCafeView from '../components/OwnerCafeView';
+import OwnerHeroWave from '../components/OwnerHeroWave';
+import OwnerSmileLoader from '../components/OwnerSmileLoader';
+import OwnerReviewListPopup from '../components/OwnerReviewListPopup';
+import OwnerNotifBanner from '../components/OwnerNotifBanner';
+import SportMiniAnim from '../components/SportMiniAnim';
+import { dailyMonthValueRange } from '../utils/waveValueScore';
 import { captureElementAsBlob, downloadBlob } from '../utils/captureImage';
+import AppLogo from '../components/AppLogo';
 const COLORS = ['#4472c4', '#92d050', '#f4b084', '#ed7d31'];
 
 function usePwaInstall() {
@@ -52,6 +60,7 @@ function OwnerBrandHeader({ subtitle, actions }) {
   return (
     <header className="owner-brand-header">
       <div className="owner-brand-title">
+        <AppLogo className="app-logo-owner" />
         <h1>Vathiyayath Sports Hub</h1>
         {subtitle && <p className="owner-brand-sub">{subtitle}</p>}
       </div>
@@ -145,8 +154,17 @@ function OwnerLogin({ onSuccess, standalone, native }) {
 }
 
 function ReportDay({ report, selected, onSelect }) {
+  const ref = useRef(null);
+
+  useEffect(() => {
+    if (selected && ref.current) {
+      ref.current.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+    }
+  }, [selected]);
+
   return (
     <button
+      ref={ref}
       type="button"
       className={`owner-day-chip${selected ? ' active' : ''}`}
       onClick={() => onSelect(report.payment_date)}
@@ -189,8 +207,46 @@ export default function OwnerApp({ standalone = false, native = false }) {
   const [error, setError] = useState('');
   const [downloading, setDownloading] = useState(false);
   const [showPreview, setShowPreview] = useState(true);
+  const [pendingReview, setPendingReview] = useState(null);
+  const [reviewList, setReviewList] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [showReviewList, setShowReviewList] = useState(false);
+  const [reviewsLoading, setReviewsLoading] = useState(false);
+  const [showNotifBanner, setShowNotifBanner] = useState(false);
   const exportRef = useRef(null);
+  const lastBannerReviewRef = useRef(null);
   const { canInstall, installed, install } = usePwaInstall();
+
+  const notifyNewReview = (review) => {
+    if (!review?.review_id) return;
+    if (lastBannerReviewRef.current === review.review_id) return;
+    lastBannerReviewRef.current = review.review_id;
+    setShowNotifBanner(true);
+    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+      navigator.vibrate([120, 60, 120]);
+    }
+  };
+
+  const checkReview = () => {
+    fetchOwnerReviews()
+      .then((rows) => {
+        setReviewList(rows);
+        const unread = countUnreadOwnerReviews(rows);
+        setUnreadCount(unread);
+        const latest = rows.find((r) => !r.read_by_owner
+          && !JSON.parse(localStorage.getItem('vsh_owner_dismissed_reviews') || '[]').includes(r.review_id));
+        if (latest?.review_id) {
+          setPendingReview(latest);
+          notifyNewReview(latest);
+        } else {
+          setPendingReview(null);
+          setShowNotifBanner(false);
+          lastBannerReviewRef.current = null;
+        }
+      })
+      .catch(() => { /* ignore poll errors */ });
+  };
+
   const load = () => {
     setLoading(true);
     setError('');
@@ -212,6 +268,54 @@ export default function OwnerApp({ standalone = false, native = false }) {
   useEffect(() => {
     if (authed) load();
   }, [authed]);
+
+  useEffect(() => {
+    if (!authed) return undefined;
+    checkReview();
+    const timer = setInterval(checkReview, 15000);
+    const onFocus = () => checkReview();
+    window.addEventListener('focus', onFocus);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [authed]);
+
+  const openReview = async () => {
+    setShowNotifBanner(false);
+    setReviewsLoading(true);
+    setShowReviewList(true);
+    try {
+      const rows = await fetchOwnerReviews();
+      setReviewList(rows);
+      setUnreadCount(countUnreadOwnerReviews(rows));
+    } catch {
+      /* keep existing list */
+    } finally {
+      setReviewsLoading(false);
+    }
+  };
+
+  const dismissNotifBanner = () => {
+    setShowNotifBanner(false);
+  };
+
+  const handleReviewRead = async (reviewId) => {
+    await markOwnerReviewRead(reviewId);
+    const rows = await fetchOwnerReviews().catch(() => reviewList);
+    setReviewList(rows);
+    setUnreadCount(countUnreadOwnerReviews(rows));
+    const latest = rows.find((r) => !r.read_by_owner);
+    setPendingReview(latest || null);
+    if (!latest) {
+      setShowNotifBanner(false);
+      lastBannerReviewRef.current = null;
+    }
+  };
+
+  const closeReviewList = () => {
+    setShowReviewList(false);
+  };
 
   if (!authed) {
     return <OwnerLogin onSuccess={() => setAuthed(true)} standalone={standalone} native={native} />;
@@ -246,12 +350,28 @@ export default function OwnerApp({ standalone = false, native = false }) {
     total: collection.total || 0,
   } : null);
 
+  const dailyRange = report
+    ? dailyMonthValueRange(dailyReports, report.payment_date, collection.total)
+    : { min: 0, max: 0 };
+
   return (
     <div className="owner-app">
       <OwnerBrandHeader
         subtitle={ownerTab === 'cafe' ? 'Cafe Analysis — Monthly sales' : 'Owner Reports — Daily collection & turf hours'}
         actions={(
           <>
+            <button
+              type="button"
+              className={`owner-notif-btn${unreadCount > 0 ? ' has-notif' : ''}`}
+              onClick={openReview}
+              aria-label={unreadCount > 0 ? `${unreadCount} new customer reviews` : 'Customer reviews'}
+              title={unreadCount > 0 ? `${unreadCount} new review(s)` : 'Customer reviews'}
+            >
+              <span className="owner-notif-icon" aria-hidden="true">🔔</span>
+              {unreadCount > 0 && (
+                <span className="owner-notif-count">{unreadCount > 9 ? '9+' : unreadCount}</span>
+              )}
+            </button>
             {standalone && !native && canInstall && !installed && (
               <button type="button" className="btn small owner-install-header" onClick={install}>
                 Install
@@ -268,13 +388,20 @@ export default function OwnerApp({ standalone = false, native = false }) {
         )}
       />
 
+      {showNotifBanner && pendingReview && (
+        <OwnerNotifBanner
+          onOpen={openReview}
+          onDismiss={dismissNotifBanner}
+        />
+      )}
+
       <div className="owner-content">
         <div className="owner-tab-panel" hidden={ownerTab !== 'cafe'}>
           <OwnerCafeView />
         </div>
         <div className="owner-tab-panel" hidden={ownerTab !== 'home'}>
           <>
-            {loading && <p className="muted owner-pad">Loading...</p>}
+            {loading && !dailyReports.length && <OwnerSmileLoader label="Loading reports..." />}
             {error && <p className="alert error owner-pad">{error}</p>}
 
             {!loading && dailyReports.length === 0 && (
@@ -286,7 +413,8 @@ export default function OwnerApp({ standalone = false, native = false }) {
 
             {dailyReports.length > 0 && report && (
               <>
-          <div className="owner-day-scroll">
+          <div className={`owner-day-scroll-wrap${dailyReports.length > 2 ? ' has-scroll' : ''}`}>
+            <div className="owner-day-scroll">
             {dailyReports.map((r) => (
               <ReportDay
                 key={r.payment_date}
@@ -295,29 +423,41 @@ export default function OwnerApp({ standalone = false, native = false }) {
                 onSelect={setSelectedDate}
               />
             ))}
+            </div>
           </div>
 
-          <div className="owner-hero">
-            <span>Total Collected</span>
-            <strong>{formatCurrency(collection.total)}</strong>
-            <small>Payment date: {formatDateDMY(report.payment_date)}</small>
+          <div className="owner-hero owner-hero-daily">
+            <OwnerHeroWave
+              variant="daily"
+              value={collection.total}
+              minValue={dailyRange.min}
+              maxValue={dailyRange.max}
+            >
+              <span>Total Collected</span>
+              <strong>{formatCurrency(collection.total)}</strong>
+              <small>Payment date: {formatDateDMY(report.payment_date)}</small>
+            </OwnerHeroWave>
           </div>
 
           {highlights && (
             <div className="owner-highlight-grid">
               <div className="owner-highlight owner-hl-turf">
+                <SportMiniAnim sport="turf" />
                 <span>Turf</span>
                 <strong>{formatCurrency(highlights.turf)}</strong>
               </div>
               <div className="owner-highlight owner-hl-badminton">
+                <SportMiniAnim sport="badminton" />
                 <span>Badminton</span>
                 <strong>{formatCurrency(highlights.badminton)}</strong>
               </div>
               <div className="owner-highlight owner-hl-gym">
+                <SportMiniAnim sport="gym" />
                 <span>Gym</span>
                 <strong>{formatCurrency(highlights.gym)}</strong>
               </div>
               <div className="owner-highlight owner-hl-coaching">
+                <SportMiniAnim sport="coaching" />
                 <span>Coaching</span>
                 <strong>{formatCurrency(highlights.coaching)}</strong>
               </div>
@@ -418,6 +558,15 @@ export default function OwnerApp({ standalone = false, native = false }) {
       </div>
 
       <OwnerBottomNav active={ownerTab} onChange={setOwnerTab} />
+
+      {showReviewList && (
+        <OwnerReviewListPopup
+          reviews={reviewList}
+          loading={reviewsLoading}
+          onClose={closeReviewList}
+          onMarkRead={handleReviewRead}
+        />
+      )}
     </div>
   );
 }

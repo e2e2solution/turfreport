@@ -1,4 +1,5 @@
 import { MongoClient } from 'mongodb';
+import { legacyReportToReview } from '../utils/reviewLegacy.js';
 
 let client;
 let db;
@@ -162,6 +163,107 @@ export async function getCafeReportFromMongo(monthKey) {
   }
   try {
     return getOwnerDb().collection('cafe_reports').findOne({ month_key: monthKey });
+  } catch (err) {
+    lastError = err.message;
+    return null;
+  }
+}
+
+export async function syncReviewToMongo(review) {
+  if (!isMongoReady()) {
+    const connected = await connectMongo();
+    if (!connected) return { ok: false, error: lastError };
+  }
+  try {
+    await getOwnerDb().collection('customer_reviews').updateOne(
+      { review_id: review.review_id },
+      { $set: review },
+      { upsert: true },
+    );
+    return { ok: true };
+  } catch (err) {
+    lastError = err.message;
+    return { ok: false, error: err.message };
+  }
+}
+
+export async function getLatestUnreadReviewFromMongo() {
+  if (!isMongoReady()) {
+    const connected = await connectMongo();
+    if (!connected) return null;
+  }
+  try {
+    const fromReviews = await getOwnerDb().collection('customer_reviews').findOne(
+      { read_by_owner: { $ne: true } },
+      { sort: { created_at: -1, review_id: -1 } },
+    );
+    if (fromReviews) return fromReviews;
+
+    const legacy = await getOwnerDb().collection('daily_reports').findOne(
+      {
+        payment_date: { $regex: /^review-/ },
+        read_by_owner: { $ne: true },
+      },
+      { sort: { created_at: -1, payment_date: -1 } },
+    );
+    return legacyReportToReview(legacy);
+  } catch (err) {
+    lastError = err.message;
+    return null;
+  }
+}
+
+export async function markReviewReadInMongo(reviewId) {
+  if (!isMongoReady()) {
+    const connected = await connectMongo();
+    if (!connected) return { ok: false, error: lastError };
+  }
+  try {
+    await getOwnerDb().collection('customer_reviews').updateOne(
+      { review_id: reviewId },
+      { $set: { read_by_owner: true } },
+    );
+    await getOwnerDb().collection('daily_reports').updateOne(
+      { payment_date: `review-${reviewId}` },
+      { $set: { read_by_owner: true } },
+    );
+    return { ok: true };
+  } catch (err) {
+    lastError = err.message;
+    return { ok: false, error: err.message };
+  }
+}
+
+export async function listReviewsFromMongo(limit = 50) {
+  if (!isMongoReady()) {
+    const connected = await connectMongo();
+    if (!connected) return null;
+  }
+  try {
+    const fromReviews = await getOwnerDb().collection('customer_reviews')
+      .find({})
+      .sort({ created_at: -1, review_id: -1 })
+      .limit(limit)
+      .toArray();
+
+    const legacyRows = await getOwnerDb().collection('daily_reports')
+      .find({ payment_date: { $regex: /^review-/ } })
+      .sort({ created_at: -1, payment_date: -1 })
+      .limit(limit)
+      .toArray();
+
+    const byId = new Map();
+    for (const row of legacyRows) {
+      const review = legacyReportToReview(row);
+      if (review) byId.set(review.review_id, review);
+    }
+    for (const row of fromReviews) {
+      if (row?.review_id) byId.set(row.review_id, row);
+    }
+
+    return [...byId.values()].sort(
+      (a, b) => String(b.created_at || b.review_id).localeCompare(String(a.created_at || a.review_id)),
+    );
   } catch (err) {
     lastError = err.message;
     return null;
