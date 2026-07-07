@@ -99,3 +99,49 @@ export async function pushReviewToCloud(review) {
 
   return { ok: false, error: lastError };
 }
+
+export async function pushPtDraftToCloud(draft) {
+  const base = process.env.CLOUD_SYNC_URL?.replace(/\/$/, '');
+  const key = process.env.OWNER_SYNC_KEY;
+  if (!base || !key) {
+    return { ok: false, error: 'CLOUD_SYNC_URL or OWNER_SYNC_KEY not set in server/.env' };
+  }
+  try {
+    const res = await fetch(`${base}/api/owner/sync-pt-draft`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Sync-Key': key,
+      },
+      body: JSON.stringify(draft),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      return { ok: false, error: data.error || `PT draft cloud sync failed (${res.status})` };
+    }
+    return { ok: true, url: base };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+}
+
+export async function fetchPtDraftsFromCloud({ status = 'pending' } = {}) {
+  const base = process.env.CLOUD_SYNC_URL?.replace(/\/$/, '');
+  const key = process.env.OWNER_SYNC_KEY;
+  if (!base || !key) {
+    return { ok: false, error: 'CLOUD_SYNC_URL or OWNER_SYNC_KEY not set' };
+  }
+  try {
+    const qs = status ? `?status=${encodeURIComponent(status)}` : '';
+    const res = await fetch(`${base}/api/owner/pt-drafts${qs}`, {
+      headers: { 'X-Sync-Key': key },
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      return { ok: false, error: data.error || `Fetch PT drafts failed (${res.status})` };
+    }
+    return { ok: true, drafts: data.drafts || data };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+}

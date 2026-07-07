@@ -2276,6 +2276,16 @@ textarea:focus {
   max-width: 100%;
 }
 
+.pt-restart-form {
+  padding-top: 0.5rem;
+  border-top: 1px solid #e2e8f0;
+}
+
+.pt-restart-form h4 {
+  margin: 0 0 0.75rem;
+  font-size: 0.95rem;
+}
+
 .pt-client-panel {
   margin-bottom: 1rem;
 }
@@ -2338,6 +2348,23 @@ textarea:focus {
 .pt-due-amount {
   color: #dc2626;
   font-weight: 600;
+}
+
+.pt-client-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  white-space: nowrap;
+}
+
+.pt-draft-inbox {
+  margin-bottom: 1rem;
+}
+
+.pt-draft-inbox-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
 }
 
 .pt-session-calendar {

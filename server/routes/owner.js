@@ -3,7 +3,7 @@ import { authMiddleware } from '../middleware/auth.js';
 import {
   verifyOwnerPin, signOwnerToken, ownerAuthMiddleware,
 } from '../middleware/ownerAuth.js';
-import { syncReportToMongo, isMongoReady, getMongoError, syncCafeToMongo, listCafeMonthsFromMongo, getCafeReportFromMongo, syncReviewToMongo, getLatestUnreadReviewFromMongo, markReviewReadInMongo, listReviewsFromMongo } from '../db/mongo.js';
+import { syncReportToMongo, isMongoReady, getMongoError, syncCafeToMongo, listCafeMonthsFromMongo, getCafeReportFromMongo, syncReviewToMongo, getLatestUnreadReviewFromMongo, markReviewReadInMongo, listReviewsFromMongo, syncPtDraftToMongo, listPtDraftsFromMongo } from '../db/mongo.js';
 import { buildOwnerReportSnapshot } from '../utils/ownerReport.js';
 import { saveOwnerReport } from '../utils/ownerStore.js';
 import {
@@ -113,6 +113,36 @@ router.post('/sync-review', async (req, res) => {
     return res.status(503).json({ error: mongo.error || 'MongoDB unavailable' });
   }
   res.json({ success: true, mongo_synced: true, review_id: review.review_id });
+});
+
+router.post('/sync-pt-draft', async (req, res) => {
+  const key = req.headers['x-sync-key'];
+  if (!process.env.OWNER_SYNC_KEY || key !== process.env.OWNER_SYNC_KEY) {
+    return res.status(401).json({ error: 'Invalid sync key' });
+  }
+  const draft = req.body;
+  if (!draft?.draft_id || !draft?.trainer_id) {
+    return res.status(400).json({ error: 'Invalid PT draft payload' });
+  }
+
+  const mongo = await syncPtDraftToMongo({ ...draft, status: draft.status || 'pending' });
+  if (!mongo.ok) {
+    return res.status(503).json({ error: mongo.error || 'MongoDB unavailable' });
+  }
+  res.json({ success: true, mongo_synced: true, draft_id: draft.draft_id });
+});
+
+router.get('/pt-drafts', async (req, res) => {
+  const key = req.headers['x-sync-key'];
+  if (!process.env.OWNER_SYNC_KEY || key !== process.env.OWNER_SYNC_KEY) {
+    return res.status(401).json({ error: 'Invalid sync key' });
+  }
+  const status = req.query.status || 'pending';
+  const drafts = await listPtDraftsFromMongo({ status });
+  if (!drafts) {
+    return res.status(503).json({ error: getMongoError() || 'MongoDB unavailable' });
+  }
+  res.json({ drafts });
 });
 
 router.post('/push', authMiddleware, async (req, res) => {

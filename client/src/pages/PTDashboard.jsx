@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { createPtTrainer, fetchPtClients, fetchPtTrainers, formatCurrency } from '../api';
+import { createPtTrainer, deletePtClient, fetchPtClients, fetchPtTrainers, formatCurrency, undoPtComplete } from '../api';
+import PtDraftInbox from '../components/PtDraftInbox';
+import { ptStatusLabel } from '../utils/pt';
 
 const emptyTrainer = {
   name: '',
@@ -16,6 +18,9 @@ export default function PTDashboard() {
   const [form, setForm] = useState(emptyTrainer);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [undoingId, setUndoingId] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const load = () => {
     setLoading(true);
@@ -35,7 +40,7 @@ export default function PTDashboard() {
       .finally(() => setLoading(false));
   };
 
-  useEffect(load, [status, trainerId]);
+  useEffect(load, [status, trainerId, refreshKey]);
 
   const set = (field, value) => setForm((f) => ({ ...f, [field]: value }));
 
@@ -53,8 +58,34 @@ export default function PTDashboard() {
     }
   };
 
-  const activeCount = clients.filter((c) => c.status === 'ACTIVE').length;
-  const completedCount = clients.filter((c) => c.status === 'COMPLETED').length;
+  const handleUndoReadyForPayment = async (clientId, clientName) => {
+    if (!confirm(`Move ${clientName} back to ongoing PT?`)) return;
+    setUndoingId(clientId);
+    try {
+      await undoPtComplete(clientId);
+      load();
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setUndoingId(null);
+    }
+  };
+
+  const handleDeleteClient = async (clientId, clientName) => {
+    if (!confirm(`Delete ${clientName}? All sessions and freeze records will be removed.`)) return;
+    setDeletingId(clientId);
+    try {
+      await deletePtClient(clientId);
+      load();
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const ongoingCount = clients.filter((c) => c.status === 'ACTIVE').length;
+  const readyCount = clients.filter((c) => c.status === 'READY_FOR_PAYMENT').length;
   const selectedTrainer = trainers.find((t) => String(t.id) === trainerId);
 
   return (
@@ -74,14 +105,16 @@ export default function PTDashboard() {
           <strong className="stat-value">{clients.length}</strong>
         </div>
         <div className="stat-card">
-          <span className="stat-label">Active</span>
-          <strong className="stat-value">{activeCount}</strong>
+          <span className="stat-label">Ongoing</span>
+          <strong className="stat-value">{ongoingCount}</strong>
         </div>
         <div className="stat-card">
-          <span className="stat-label">Completed</span>
-          <strong className="stat-value">{completedCount}</strong>
+          <span className="stat-label">Ready for Payment</span>
+          <strong className="stat-value">{readyCount}</strong>
         </div>
       </div>
+
+      <PtDraftInbox onConfirmed={() => setRefreshKey((k) => k + 1)} />
 
       <div className="card pt-client-panel">
         <div className="pt-client-filters">
@@ -98,8 +131,8 @@ export default function PTDashboard() {
             Status
             <select value={status} onChange={(e) => setStatus(e.target.value)}>
               <option value="">All</option>
-              <option value="ACTIVE">Active</option>
-              <option value="COMPLETED">Completed</option>
+              <option value="ACTIVE">Ongoing</option>
+              <option value="READY_FOR_PAYMENT">Ready for Payment</option>
             </select>
           </label>
         </div>
@@ -121,6 +154,7 @@ export default function PTDashboard() {
                   <th>Sessions done</th>
                   <th>Remaining</th>
                   <th>Payment due</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -129,7 +163,10 @@ export default function PTDashboard() {
                     <td>
                       <Link to={`/pt/clients/${client.id}`} className="pt-client-link">
                         <strong>{client.client_name}</strong>
-                        <small>{client.plan_label} · {client.trainer_name}</small>
+                        <small>
+                          {client.plan_label} · {client.trainer_name}
+                          {status === '' && ` · ${client.status_label || ptStatusLabel(client.status)}`}
+                        </small>
                       </Link>
                     </td>
                     <td>
@@ -142,6 +179,26 @@ export default function PTDashboard() {
                     </td>
                     <td className={client.amount_due > 0 ? 'pt-due-amount' : ''}>
                       {formatCurrency(client.amount_due)}
+                    </td>
+                    <td className="pt-client-actions">
+                      {client.status === 'READY_FOR_PAYMENT' && (
+                        <button
+                          type="button"
+                          className="btn small"
+                          disabled={undoingId === client.id || deletingId === client.id}
+                          onClick={() => handleUndoReadyForPayment(client.id, client.client_name)}
+                        >
+                          {undoingId === client.id ? '...' : 'Undo'}
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className="btn small danger"
+                        disabled={deletingId === client.id || undoingId === client.id}
+                        onClick={() => handleDeleteClient(client.id, client.client_name)}
+                      >
+                        {deletingId === client.id ? '...' : 'Delete'}
+                      </button>
                     </td>
                   </tr>
                 ))}

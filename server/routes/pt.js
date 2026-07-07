@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import db from '../db.js';
 import { parseNum } from '../utils/excel.js';
+import { syncTrainerToMongo } from '../db/mongo.js';
+import ptDraftsRouter from './ptDrafts.js';
 import {
   addDaysISO,
   calcPtBaseEndDate,
@@ -8,7 +10,9 @@ import {
   goalLabel,
   isValidPtGoal,
   isValidPtPlanType,
+  isPtCycleLocked,
   planLabel,
+  ptStatusLabel,
   targetSessionsForPlan,
   todayISO,
 } from '../utils/pt.js';
@@ -69,6 +73,7 @@ function applyClientDerived(client, opts = {}) {
     ...client,
     pt_goal_label: goalLabel(client.pt_goal),
     plan_label: planLabel(client.plan_type),
+    status_label: ptStatusLabel(client.status),
     completed_sessions: completedSessions,
     session_target: sessionTarget,
     sessions_remaining: sessionsRemaining,
@@ -91,7 +96,8 @@ function syncClientCompletion(clientId) {
   const completedSessions = getSessionCount(client.id);
   const sessionTarget = targetSessionsForPlan(client.plan_type);
 
-  if (sessionTarget && completedSessions >= sessionTarget && client.status !== 'COMPLETED' && !client.manual_reopen) {
+  if (sessionTarget && completedSessions >= sessionTarget
+    && client.status !== 'READY_FOR_PAYMENT' && !client.manual_reopen) {
     const lastSession = db.prepare(`
       SELECT session_date
       FROM pt_sessions
@@ -101,12 +107,12 @@ function syncClientCompletion(clientId) {
     `).get(client.id);
     db.prepare(`
       UPDATE pt_clients
-      SET status = 'COMPLETED', completed_at = ?
+      SET status = 'READY_FOR_PAYMENT', completed_at = ?
       WHERE id = ?
     `).run(lastSession?.session_date || todayISO(), client.id);
-    client.status = 'COMPLETED';
+    client.status = 'READY_FOR_PAYMENT';
     client.completed_at = lastSession?.session_date || todayISO();
-  } else if (sessionTarget && completedSessions < sessionTarget && client.status === 'COMPLETED') {
+  } else if (sessionTarget && completedSessions < sessionTarget && client.status === 'READY_FOR_PAYMENT') {
     db.prepare(`
       UPDATE pt_clients
       SET status = 'ACTIVE', completed_at = NULL
@@ -178,6 +184,7 @@ router.post('/trainers', (req, res) => {
   );
 
   const trainer = db.prepare('SELECT * FROM pt_trainers WHERE id = ?').get(result.lastInsertRowid);
+  syncTrainerToMongo(trainer).catch(() => {});
   res.status(201).json({ ...trainer, client_count: 0 });
 });
 
@@ -245,6 +252,14 @@ router.get('/clients/:id', (req, res) => {
   res.json(client);
 });
 
+router.delete('/clients/:id', (req, res) => {
+  const existing = db.prepare('SELECT * FROM pt_clients WHERE id = ?').get(req.params.id);
+  if (!existing) return res.status(404).json({ error: 'PT client not found' });
+
+  db.prepare('DELETE FROM pt_clients WHERE id = ?').run(req.params.id);
+  res.json({ ok: true, id: Number(req.params.id) });
+});
+
 router.put('/clients/:id/payment', (req, res) => {
   const existing = db.prepare('SELECT * FROM pt_clients WHERE id = ?').get(req.params.id);
   if (!existing) return res.status(404).json({ error: 'PT client not found' });
@@ -276,7 +291,7 @@ router.post('/clients/:id/complete', (req, res) => {
 
   db.prepare(`
     UPDATE pt_clients
-    SET status = 'COMPLETED', completed_at = ?, manual_reopen = 0
+    SET status = 'READY_FOR_PAYMENT', completed_at = ?, manual_reopen = 0
     WHERE id = ?
   `).run(todayISO(), req.params.id);
 
@@ -286,8 +301,8 @@ router.post('/clients/:id/complete', (req, res) => {
 router.post('/clients/:id/reopen', (req, res) => {
   const existing = db.prepare('SELECT * FROM pt_clients WHERE id = ?').get(req.params.id);
   if (!existing) return res.status(404).json({ error: 'PT client not found' });
-  if (existing.status !== 'COMPLETED') {
-    return res.status(400).json({ error: 'PT is not completed' });
+  if (existing.status !== 'READY_FOR_PAYMENT') {
+    return res.status(400).json({ error: 'PT is not ready for payment' });
   }
 
   db.prepare(`
@@ -299,11 +314,35 @@ router.post('/clients/:id/reopen', (req, res) => {
   res.json(getClientWithDetails(req.params.id));
 });
 
+router.post('/clients/:id/restart', (req, res) => {
+  const existing = db.prepare('SELECT * FROM pt_clients WHERE id = ?').get(req.params.id);
+  if (!existing) return res.status(404).json({ error: 'PT client not found' });
+  if (existing.status !== 'READY_FOR_PAYMENT') {
+    return res.status(400).json({ error: 'PT must be ready for payment before restart' });
+  }
+
+  const startDate = req.body?.start_date;
+  if (!startDate) return res.status(400).json({ error: 'start_date is required' });
+
+  const baseEndDate = calcPtBaseEndDate(startDate, existing.plan_type);
+
+  db.prepare('DELETE FROM pt_sessions WHERE client_id = ?').run(req.params.id);
+  db.prepare('DELETE FROM pt_freezes WHERE client_id = ?').run(req.params.id);
+  db.prepare(`
+    UPDATE pt_clients
+    SET start_date = ?, base_end_date = ?, status = 'ACTIVE',
+      completed_at = NULL, manual_reopen = 0
+    WHERE id = ?
+  `).run(startDate, baseEndDate, req.params.id);
+
+  res.json(getClientWithDetails(req.params.id));
+});
+
 router.post('/clients/:id/sessions', (req, res) => {
   const existing = db.prepare('SELECT * FROM pt_clients WHERE id = ?').get(req.params.id);
   if (!existing) return res.status(404).json({ error: 'PT client not found' });
-  if (existing.status === 'COMPLETED') {
-    return res.status(400).json({ error: 'PT is already completed' });
+  if (isPtCycleLocked(existing.status)) {
+    return res.status(400).json({ error: 'PT is ready for payment — restart or undo to edit sessions' });
   }
 
   const b = req.body || {};
@@ -353,7 +392,7 @@ router.delete('/sessions/:sessionId', (req, res) => {
 router.post('/clients/:id/freezes', (req, res) => {
   const existing = db.prepare('SELECT * FROM pt_clients WHERE id = ?').get(req.params.id);
   if (!existing) return res.status(404).json({ error: 'PT client not found' });
-  if (existing.status === 'COMPLETED') {
+  if (isPtCycleLocked(existing.status)) {
     return res.status(400).json({ error: 'Completed PT cannot be frozen' });
   }
 
@@ -440,12 +479,14 @@ router.get('/report', (req, res) => {
     date,
     total_clients: clients.length,
     active_clients: clients.filter((c) => c.status === 'ACTIVE').length,
-    completed_clients: clients.filter((c) => c.status === 'COMPLETED').length,
+    ready_for_payment_clients: clients.filter((c) => c.status === 'READY_FOR_PAYMENT').length,
     frozen_clients: frozenRows.length,
     sessions_completed_today: sessions.length,
   };
 
   res.json({ summary, sessions, clients });
 });
+
+router.use(ptDraftsRouter);
 
 export default router;

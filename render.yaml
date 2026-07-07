@@ -3,7 +3,7 @@ services:
     name: vsh-sports-hub
     runtime: node
     plan: free
-    buildCommand: npm install --prefix server && npm install --prefix client --include=dev && npm run build --prefix client
+    buildCommand: npm install --prefix server && npm install --prefix client --include=dev && npm run build --prefix client && npm run build:trainer --prefix client
     startCommand: NODE_ENV=production npm start --prefix server
     healthCheckPath: /api/health
     envVars:
@@ -23,3 +23,5 @@ services:
         sync: false
       - key: OWNER_SYNC_KEY
         generateValue: true
+      - key: TRAINER_PASSWORD
+        value: "123"

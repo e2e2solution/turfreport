@@ -1,0 +1,52 @@
+name: Build Trainer APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      cloud_url:
+        description: 'Cloud server URL baked into APK (optional if set in repo secrets)'
+        required: false
+        type: string
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Install dependencies
+        run: npm ci --prefix client
+
+      - name: Setup trainer Android project
+        run: npm run setup:trainer-android --prefix client
+
+      - name: Build trainer web app
+        env:
+          VITE_API_BASE: ${{ inputs.cloud_url || secrets.VITE_API_BASE }}
+        run: npm run build:trainer --prefix client
+
+      - name: Sync Capacitor Android (trainer)
+        run: npm run cap:sync:trainer --prefix client
+
+      - name: Build debug APK
+        run: |
+          cd client/android-trainer
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vsh-trainer-apk
+          path: client/android-trainer/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 30

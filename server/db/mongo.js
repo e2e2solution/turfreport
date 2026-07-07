@@ -269,3 +269,112 @@ export async function listReviewsFromMongo(limit = 50) {
     return null;
   }
 }
+
+export async function syncPtDraftToMongo(draft) {
+  if (!isMongoReady()) {
+    const connected = await connectMongo();
+    if (!connected) return { ok: false, error: lastError };
+  }
+  try {
+    await getOwnerDb().collection('pt_client_drafts').updateOne(
+      { draft_id: draft.draft_id },
+      { $set: draft },
+      { upsert: true },
+    );
+    return { ok: true };
+  } catch (err) {
+    lastError = err.message;
+    return { ok: false, error: err.message };
+  }
+}
+
+export async function listPtDraftsFromMongo({ status = 'pending', trainerId } = {}) {
+  if (!isMongoReady()) {
+    const connected = await connectMongo();
+    if (!connected) return null;
+  }
+  try {
+    const filter = {};
+    if (status) filter.status = status;
+    if (trainerId) filter.trainer_id = trainerId;
+    return getOwnerDb().collection('pt_client_drafts')
+      .find(filter)
+      .sort({ updated_at: -1, created_at: -1 })
+      .toArray();
+  } catch (err) {
+    lastError = err.message;
+    return null;
+  }
+}
+
+export async function getPtDraftFromMongo(draftId) {
+  if (!isMongoReady()) {
+    const connected = await connectMongo();
+    if (!connected) return null;
+  }
+  try {
+    return getOwnerDb().collection('pt_client_drafts').findOne({ draft_id: draftId });
+  } catch (err) {
+    lastError = err.message;
+    return null;
+  }
+}
+
+export async function updatePtDraftStatusInMongo(draftId, status, extra = {}) {
+  if (!isMongoReady()) {
+    const connected = await connectMongo();
+    if (!connected) return { ok: false, error: lastError };
+  }
+  try {
+    await getOwnerDb().collection('pt_client_drafts').updateOne(
+      { draft_id: draftId },
+      { $set: { status, updated_at: new Date().toISOString(), ...extra } },
+    );
+    return { ok: true };
+  } catch (err) {
+    lastError = err.message;
+    return { ok: false, error: err.message };
+  }
+}
+
+export async function syncTrainerToMongo(trainer) {
+  if (!isMongoReady()) {
+    const connected = await connectMongo();
+    if (!connected) return { ok: false, error: lastError };
+  }
+  try {
+    await getOwnerDb().collection('pt_trainers').updateOne(
+      { trainer_id: trainer.id },
+      {
+        $set: {
+          trainer_id: trainer.id,
+          name: trainer.name,
+          name_lower: trainer.name.toLowerCase().trim(),
+          phone: trainer.phone || '',
+          specializations: trainer.specializations || '',
+          updated_at: new Date().toISOString(),
+        },
+      },
+      { upsert: true },
+    );
+    return { ok: true };
+  } catch (err) {
+    lastError = err.message;
+    return { ok: false, error: err.message };
+  }
+}
+
+export async function findTrainerInMongoByName(name) {
+  if (!isMongoReady()) {
+    const connected = await connectMongo();
+    if (!connected) return null;
+  }
+  try {
+    return getOwnerDb().collection('pt_trainers').findOne({
+      name_lower: name.toLowerCase().trim(),
+    });
+  } catch (err) {
+    lastError = err.message;
+    return null;
+  }
+}

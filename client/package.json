@@ -7,10 +7,16 @@
     "dev": "vite",
     "build": "vite build",
     "build:owner": "vite build --config vite.owner.config.js && node scripts/prepare-owner-apk.cjs",
+    "build:trainer": "vite build --config vite.trainer.config.js && node scripts/prepare-trainer-apk.cjs",
+    "setup:trainer-android": "node scripts/setup-trainer-android.cjs",
     "cap:sync": "npx cap sync android",
+    "cap:sync:trainer": "node scripts/sync-trainer-cap.cjs",
     "cap:open": "npx cap open android",
+    "cap:open:trainer": "node scripts/sync-trainer-cap.cjs && npx cap open android",
     "android:apk": "cd android && gradlew.bat assembleDebug",
     "android:apk:release": "cd android && gradlew.bat assembleRelease",
+    "android:trainer:apk": "cd android-trainer && gradlew.bat assembleDebug",
+    "android:trainer:apk:release": "cd android-trainer && gradlew.bat assembleRelease",
     "preview": "vite preview"
   },
   "dependencies": {

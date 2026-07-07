@@ -1,0 +1,12 @@
+{
+  "appId": "com.vshub.trainer",
+  "appName": "VSH Trainer",
+  "webDir": "dist-trainer",
+  "server": {
+    "androidScheme": "https"
+  },
+  "android": {
+    "path": "android-trainer",
+    "allowMixedContent": false
+  }
+}

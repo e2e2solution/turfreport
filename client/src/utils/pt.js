@@ -50,6 +50,18 @@ export function calcPtEndDate(startISO, _planType, freezeDays = 0) {
   return addDaysISO(startISO, 45 + Number(freezeDays || 0));
 }
 
+export function ptStatusLabel(status) {
+  switch (status) {
+    case 'ACTIVE': return 'Ongoing';
+    case 'READY_FOR_PAYMENT': return 'Ready for Payment';
+    default: return status || '';
+  }
+}
+
+export function isPtCycleLocked(status) {
+  return status === 'READY_FOR_PAYMENT';
+}
+
 export function ptPlanLabel(planType) {
   return PT_PLAN_OPTIONS.find((p) => p.value === planType)?.label || planType;
 }

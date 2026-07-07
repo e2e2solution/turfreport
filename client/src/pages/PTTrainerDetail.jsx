@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { createPtClient, fetchPtTrainer, formatCurrency, todayISO } from '../api';
-import { calcPtEndDate, PT_GOAL_OPTIONS, PT_PLAN_OPTIONS } from '../utils/pt';
+import { calcPtEndDate, PT_GOAL_OPTIONS, PT_PLAN_OPTIONS, ptStatusLabel } from '../utils/pt';
 import { PaymentSection } from '../components/BookingForm';
 
 function emptyClientForm() {
@@ -122,7 +122,9 @@ export default function PTTrainerDetail() {
               <Link key={client.id} to={`/pt/clients/${client.id}`} className={`booking-card status-${client.status.toLowerCase()}`}>
                 <div className="card-top">
                   <strong>{client.client_name}</strong>
-                  <span className={`badge ${client.status === 'COMPLETED' ? 'closed' : 'pending'}`}>{client.status}</span>
+                  <span className={`badge ${client.status === 'READY_FOR_PAYMENT' ? 'closed' : 'pending'}`}>
+                    {client.status_label || ptStatusLabel(client.status)}
+                  </span>
                 </div>
                 <div className="card-meta">
                   <span>{client.plan_label}</span>

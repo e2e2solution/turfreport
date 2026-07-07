@@ -78,6 +78,18 @@ export function planLabel(planType) {
   }
 }
 
+export function isPtCycleLocked(status) {
+  return status === 'READY_FOR_PAYMENT';
+}
+
+export function ptStatusLabel(status) {
+  switch (status) {
+    case 'ACTIVE': return 'Ongoing';
+    case 'READY_FOR_PAYMENT': return 'Ready for Payment';
+    default: return status || '';
+  }
+}
+
 export function isDateWithinRange(dateISO, fromISO, toISO) {
   if (!dateISO || !fromISO || !toISO) return false;
   return dateISO >= fromISO && dateISO <= toISO;

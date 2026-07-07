@@ -20,6 +20,7 @@ import ownerRouter from './routes/owner.js';
 import ptRouter from './routes/pt.js';
 import cafeRouter from './routes/cafe.js';
 import reviewsRouter from './routes/reviews.js';
+import trainerRouter from './routes/trainer.js';
 import { authMiddleware } from './middleware/auth.js';
 import { runBackups, backupMiddleware } from './utils/backup.js';
 import { connectMongo, isMongoReady, getMongoError } from './db/mongo.js';
@@ -42,6 +43,7 @@ app.get('/api/health', (_req, res) => {
 app.use('/api', backupMiddleware);
 app.use('/api/auth', authRouter);
 app.use('/api/owner', ownerRouter);
+app.use('/api/trainer', trainerRouter);
 
 app.use('/api/bookings', authMiddleware, bookingsRouter);
 app.use('/api/online', authMiddleware, onlineRouter);
@@ -57,9 +59,14 @@ app.use('/api/backup', authMiddleware, backupRouter);
 
 if (isProd) {
   const clientDist = path.join(__dirname, '../client/dist');
+  const trainerDist = path.join(__dirname, '../client/dist-trainer');
   app.get('/owner', (_req, res) => {
     res.sendFile(path.join(clientDist, 'owner.html'));
   });
+  app.get('/trainer', (_req, res) => {
+    res.sendFile(path.join(trainerDist, 'trainer.html'));
+  });
+  app.use(express.static(trainerDist));
   app.use(express.static(clientDist));
   app.get('*', (req, res, next) => {
     if (req.path.startsWith('/api')) return next();
@@ -75,6 +82,7 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on http://localhost:${PORT}${isProd ? ' (production)' : ''}`);
   if (isProd) {
     console.log('Owner mobile app:', `http://localhost:${PORT}/owner.html`);
+    console.log('Trainer mobile app:', `http://localhost:${PORT}/trainer`);
   }
   if (!isProd) {
     try {

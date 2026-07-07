@@ -276,6 +276,10 @@ export async function fetchPtClient(id) {
   return request(`${API_PT}/clients/${id}`);
 }
 
+export async function deletePtClient(id) {
+  return request(`${API_PT}/clients/${id}`, { method: 'DELETE' });
+}
+
 export async function updatePtClientPayment(id, data) {
   return request(`${API_PT}/clients/${id}/payment`, {
     method: 'PUT',
@@ -290,6 +294,14 @@ export async function markPtComplete(id) {
 
 export async function undoPtComplete(id) {
   return request(`${API_PT}/clients/${id}/reopen`, { method: 'POST' });
+}
+
+export async function restartPtClient(id, data) {
+  return request(`${API_PT}/clients/${id}/restart`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
 }
 
 export async function addPtSession(id, data) {
@@ -631,4 +643,144 @@ export async function markOwnerReviewRead(reviewId) {
 
 export async function markAllOwnerReviewsRead(reviewIds) {
   await Promise.all(reviewIds.map((id) => markOwnerReviewRead(id)));
+}
+
+// --- Trainer mobile app ---
+const TRAINER_TOKEN_KEY = 'vsh_trainer_token';
+const TRAINER_API_BASE_KEY = 'vsh_trainer_api_base';
+
+export function getTrainerApiBase() {
+  const stored = localStorage.getItem(TRAINER_API_BASE_KEY);
+  const fromEnv = (import.meta.env.VITE_API_BASE || '').replace(/\/$/, '');
+  if (stored) return stored.replace(/\/$/, '');
+  if (fromEnv) return fromEnv;
+  if (import.meta.env.DEV && typeof window !== 'undefined') {
+    return window.location.origin.replace(/\/$/, '');
+  }
+  return '';
+}
+
+export function setTrainerApiBase(url) {
+  let trimmed = (url || '').trim().replace(/\/$/, '');
+  if (trimmed && !/^https?:\/\//i.test(trimmed)) trimmed = `https://${trimmed}`;
+  if (trimmed) localStorage.setItem(TRAINER_API_BASE_KEY, trimmed);
+  else localStorage.removeItem(TRAINER_API_BASE_KEY);
+}
+
+export function getTrainerToken() {
+  return localStorage.getItem(TRAINER_TOKEN_KEY);
+}
+
+export function setTrainerToken(token) {
+  localStorage.setItem(TRAINER_TOKEN_KEY, token);
+}
+
+export function clearTrainerToken() {
+  localStorage.removeItem(TRAINER_TOKEN_KEY);
+}
+
+function trainerApi(path) {
+  const base = getTrainerApiBase();
+  if (!base) throw new Error('Cloud server URL not set');
+  const suffix = path.startsWith('/') ? path : `/${path}`;
+  return `${base}/api/trainer${suffix}`;
+}
+
+async function trainerRequest(url, options = {}) {
+  const token = getTrainerToken();
+  const headers = {
+    ...(options.headers || {}),
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+  const res = await fetch(url, { ...options, headers });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || 'Request failed');
+  }
+  return res.json();
+}
+
+export async function trainerHealthCheck() {
+  const base = getTrainerApiBase();
+  const res = await fetch(`${base}/api/health`);
+  if (!res.ok) throw new Error('Server not reachable');
+  return res.json();
+}
+
+export async function trainerLogin(username, password) {
+  const res = await fetch(trainerApi('/login'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || 'Login failed');
+  }
+  return res.json();
+}
+
+export async function fetchTrainerDrafts() {
+  return trainerRequest(trainerApi('/drafts'));
+}
+
+export async function createTrainerDraft(data) {
+  return trainerRequest(trainerApi('/drafts'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateTrainerDraft(draftId, data) {
+  return trainerRequest(trainerApi(`/drafts/${draftId}`), {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+}
+
+export async function toggleTrainerDraftSession(draftId, sessionDate, checked) {
+  return trainerRequest(trainerApi(`/drafts/${draftId}/sessions/toggle`), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ session_date: sessionDate, checked }),
+  });
+}
+
+export async function markTrainerDraftReady(draftId) {
+  return trainerRequest(trainerApi(`/drafts/${draftId}/ready`), { method: 'POST' });
+}
+
+export async function restartTrainerDraft(draftId, startDate) {
+  return trainerRequest(trainerApi(`/drafts/${draftId}/restart`), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ start_date: startDate }),
+  });
+}
+
+// --- Staff: PT drafts from Mongo ---
+export async function fetchPtDrafts() {
+  return request(`${API_PT}/drafts`);
+}
+
+export async function collectPtDrafts() {
+  return request(`${API_PT}/drafts/collect`, { method: 'POST' });
+}
+
+export async function confirmPtDraft(draftId) {
+  return request(`${API_PT}/drafts/${draftId}/confirm`, { method: 'POST' });
+}
+
+export async function rejectPtDraft(draftId, reason = '') {
+  return request(`${API_PT}/drafts/${draftId}/reject`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ reason }),
+  });
+}
+
+export async function syncPtTrainersToCloud() {
+  return request(`${API_PT}/sync-trainers`, { method: 'POST' });
 }

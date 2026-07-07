@@ -7,8 +7,9 @@
     "dev:server": "npm run dev --prefix server",
     "dev:client": "npm run dev --prefix client",
     "start:server": "npm start --prefix server",
-    "build": "npm run build --prefix client",
+    "build": "npm run build --prefix client && npm run build:trainer --prefix client",
     "build:owner-apk": "npm run build:owner --prefix client && npm run cap:sync --prefix client",
+    "build:trainer-apk": "npm run setup:trainer-android --prefix client && npm run build:trainer --prefix client && npm run cap:sync:trainer --prefix client",
     "start:prod": "cross-env NODE_ENV=production npm start --prefix server"
   },
   "devDependencies": {

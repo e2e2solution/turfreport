@@ -47,8 +47,8 @@ export default function PTReport() {
               <strong className="stat-value">{data.summary.active_clients}</strong>
             </div>
             <div className="stat-card">
-              <span className="stat-label">Completed</span>
-              <strong className="stat-value">{data.summary.completed_clients}</strong>
+              <span className="stat-label">Ready for Payment</span>
+              <strong className="stat-value">{data.summary.ready_for_payment_clients}</strong>
             </div>
             <div className="stat-card">
               <span className="stat-label">Sessions Today</span>

@@ -1,21 +1,23 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   addPtFreeze,
   addPtSession,
+  deletePtClient,
   deletePtFreeze,
   deletePtSession,
   fetchPtClient,
   formatCurrency,
   formatDateDMY,
   markPtComplete,
+  restartPtClient,
   undoPtComplete,
   todayISO,
   updatePtClientPayment,
 } from '../api';
 import { PaymentSection, TabBar } from '../components/BookingForm';
 import PTSessionCalendar from '../components/PTSessionCalendar';
-import { PT_FREEZE_REASON_OPTIONS } from '../utils/pt';
+import { calcPtEndDate, isPtCycleLocked, PT_FREEZE_REASON_OPTIONS, ptStatusLabel } from '../utils/pt';
 
 const TABS = [
   { id: 'overview', label: 'Overview' },
@@ -26,6 +28,7 @@ const TABS = [
 
 export default function PTClientDetail() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const [client, setClient] = useState(null);
   const [tab, setTab] = useState('overview');
   const [loading, setLoading] = useState(true);
@@ -46,6 +49,8 @@ export default function PTClientDetail() {
     balance_date: '',
     notes: '',
   });
+  const [restartDate, setRestartDate] = useState(todayISO());
+  const [showRestart, setShowRestart] = useState(false);
 
   const load = () => {
     setLoading(true);
@@ -143,7 +148,7 @@ export default function PTClientDetail() {
   };
 
   const handleComplete = async () => {
-    if (!confirm('Mark this PT as completed?')) return;
+    if (!confirm('Mark this PT as ready for payment?')) return;
     setSaving(true);
     try {
       const updated = await markPtComplete(id);
@@ -155,8 +160,8 @@ export default function PTClientDetail() {
     }
   };
 
-  const handleUndoComplete = async () => {
-    if (!confirm('Undo completion? Session checkboxes will be editable again.')) return;
+  const handleUndoReadyForPayment = async () => {
+    if (!confirm('Move back to ongoing? Sessions will be editable again.')) return;
     setSaving(true);
     try {
       const updated = await undoPtComplete(id);
@@ -167,6 +172,39 @@ export default function PTClientDetail() {
       setSaving(false);
     }
   };
+
+  const handleRestart = async (e) => {
+    e.preventDefault();
+    if (!restartDate) return;
+    if (!confirm(`Restart PT from ${formatDateDMY(restartDate)}? Sessions and freezes will reset for the new cycle.`)) return;
+    setSaving(true);
+    try {
+      const updated = await restartPtClient(id, { start_date: restartDate });
+      setClient(updated);
+      setShowRestart(false);
+      setRestartDate(todayISO());
+      setTab('sessions');
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!confirm(`Delete ${client?.client_name}? All sessions and freeze records will be removed.`)) return;
+    setSaving(true);
+    try {
+      await deletePtClient(id);
+      navigate(`/pt/trainers/${client.trainer_id}`);
+    } catch (err) {
+      alert(err.message);
+      setSaving(false);
+    }
+  };
+
+  const cycleLocked = client && isPtCycleLocked(client.status);
+  const restartEndDate = calcPtEndDate(restartDate, client?.plan_type);
 
   if (loading) return <div className="page"><p className="muted">Loading...</p></div>;
   if (!client) return <div className="page"><p className="alert error">PT client not found</p></div>;
@@ -208,7 +246,7 @@ export default function PTClientDetail() {
           </div>
 
           <div className="daily-total" style={{ marginTop: 16 }}>
-            <div className="total-row"><span>Status</span><strong>{client.status}</strong></div>
+            <div className="total-row"><span>Status</span><strong>{client.status_label || ptStatusLabel(client.status)}</strong></div>
             <div className="total-row"><span>Total Amount</span><strong>{formatCurrency(client.total_amount)}</strong></div>
             <div className="total-row"><span>Paid</span><strong>{formatCurrency(client.amount_paid)}</strong></div>
             <div className="total-row"><span>Due</span><strong>{formatCurrency(client.amount_due)}</strong></div>
@@ -216,15 +254,54 @@ export default function PTClientDetail() {
 
           {client.notes && <p className="remarks" style={{ marginTop: 12 }}>{client.notes}</p>}
 
-          {client.status !== 'COMPLETED' ? (
-            <button type="button" className="btn primary" onClick={handleComplete} disabled={saving}>
-              Mark PT Complete
-            </button>
-          ) : (
-            <button type="button" className="btn" onClick={handleUndoComplete} disabled={saving}>
-              Undo Complete
-            </button>
+          <div className="card-actions" style={{ marginTop: 16, flexWrap: 'wrap', gap: 8 }}>
+            {!cycleLocked ? (
+              <button type="button" className="btn primary" onClick={handleComplete} disabled={saving}>
+                Ready for Payment
+              </button>
+            ) : (
+              <>
+                <button type="button" className="btn" onClick={handleUndoReadyForPayment} disabled={saving}>
+                  Undo Ready for Payment
+                </button>
+                <button
+                  type="button"
+                  className="btn primary"
+                  onClick={() => setShowRestart((v) => !v)}
+                  disabled={saving}
+                >
+                  {showRestart ? 'Cancel Restart' : 'Restart PT'}
+                </button>
+              </>
+            )}
+          </div>
+
+          {showRestart && cycleLocked && (
+            <form className="form pt-restart-form" onSubmit={handleRestart} style={{ marginTop: 16 }}>
+              <h4>Restart PT — same client, new cycle</h4>
+              <label>New Start Date *
+                <input
+                  type="date"
+                  value={restartDate}
+                  onChange={(e) => setRestartDate(e.target.value)}
+                  required
+                />
+              </label>
+              <p className="hint">
+                End date will be {formatDateDMY(restartEndDate)} (start + 45 days).
+                Previous sessions and freezes are cleared for the new cycle.
+              </p>
+              <button type="submit" className="btn primary" disabled={saving}>
+                {saving ? 'Restarting...' : 'Confirm Restart'}
+              </button>
+            </form>
           )}
+
+          <div style={{ marginTop: 24, paddingTop: 16, borderTop: '1px solid #e2e8f0' }}>
+            <button type="button" className="btn small danger" onClick={handleDelete} disabled={saving}>
+              Delete PT Client
+            </button>
+          </div>
         </div>
       )}
 
@@ -232,9 +309,9 @@ export default function PTClientDetail() {
         <div className="card">
           <div className="card-title-row">
             <h3>Session Calendar</h3>
-            {client.status === 'COMPLETED' && (
-              <button type="button" className="btn small" onClick={handleUndoComplete} disabled={saving}>
-                Undo Complete
+            {cycleLocked && (
+              <button type="button" className="btn small" onClick={handleUndoReadyForPayment} disabled={saving}>
+                Undo Ready for Payment
               </button>
             )}
           </div>
@@ -249,13 +326,14 @@ export default function PTClientDetail() {
             freezes={client.freezes || []}
             planType={client.plan_type}
             sessionTarget={client.session_target}
-            disabled={client.status === 'COMPLETED'}
+            disabled={cycleLocked}
             saving={saving}
             onToggle={handleToggleSession}
           />
-          {client.status === 'COMPLETED' && (
+          {cycleLocked && (
             <p className="hint" style={{ marginTop: 12 }}>
-              Sessions are locked while PT is completed. Use <strong>Undo Complete</strong> on the Overview tab to edit again.
+              Sessions are locked while ready for payment. Use <strong>Undo Ready for Payment</strong> to edit,
+              or <strong>Restart PT</strong> on Overview to begin the next cycle.
             </p>
           )}
         </div>

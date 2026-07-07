@@ -265,7 +265,7 @@ db.exec(`
     balance_gpay REAL DEFAULT 0,
     balance_cash REAL DEFAULT 0,
     balance_date TEXT,
-    status TEXT DEFAULT 'ACTIVE' CHECK(status IN ('ACTIVE', 'COMPLETED')),
+    status TEXT DEFAULT 'ACTIVE' CHECK(status IN ('ACTIVE', 'READY_FOR_PAYMENT')),
     notes TEXT DEFAULT '',
     completed_at TEXT,
     created_at TEXT DEFAULT (datetime('now'))
@@ -338,6 +338,51 @@ const ptManualReopenCol = db.prepare('PRAGMA table_info(pt_clients)').all()
 if (!ptManualReopenCol) {
   db.exec('ALTER TABLE pt_clients ADD COLUMN manual_reopen INTEGER DEFAULT 0');
   console.log('PT clients: added manual_reopen column for undo complete');
+}
+
+const ptReadyPayment = db.prepare("SELECT key FROM _app_migrations WHERE key = 'pt_ready_for_payment'").get();
+if (!ptReadyPayment) {
+  db.exec('PRAGMA foreign_keys = OFF');
+  db.exec(`
+    CREATE TABLE pt_clients_new (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      trainer_id INTEGER NOT NULL REFERENCES pt_trainers(id),
+      client_name TEXT NOT NULL,
+      pt_goal TEXT NOT NULL,
+      plan_type TEXT NOT NULL CHECK(plan_type IN ('22_sessions', '1_month', '3_month')),
+      start_date TEXT NOT NULL,
+      base_end_date TEXT NOT NULL,
+      total_amount REAL DEFAULT 0,
+      advance_gpay REAL DEFAULT 0,
+      advance_cash REAL DEFAULT 0,
+      advance_date TEXT,
+      balance_gpay REAL DEFAULT 0,
+      balance_cash REAL DEFAULT 0,
+      balance_date TEXT,
+      status TEXT DEFAULT 'ACTIVE' CHECK(status IN ('ACTIVE', 'READY_FOR_PAYMENT')),
+      notes TEXT DEFAULT '',
+      completed_at TEXT,
+      manual_reopen INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+    INSERT INTO pt_clients_new (
+      id, trainer_id, client_name, pt_goal, plan_type, start_date, base_end_date,
+      total_amount, advance_gpay, advance_cash, advance_date,
+      balance_gpay, balance_cash, balance_date, status, notes, completed_at, manual_reopen, created_at
+    )
+    SELECT
+      id, trainer_id, client_name, pt_goal, plan_type, start_date, base_end_date,
+      total_amount, advance_gpay, advance_cash, advance_date,
+      balance_gpay, balance_cash, balance_date,
+      CASE WHEN status = 'COMPLETED' THEN 'READY_FOR_PAYMENT' ELSE status END,
+      notes, completed_at, COALESCE(manual_reopen, 0), created_at
+    FROM pt_clients;
+    DROP TABLE pt_clients;
+    ALTER TABLE pt_clients_new RENAME TO pt_clients;
+  `);
+  db.exec('PRAGMA foreign_keys = ON');
+  db.prepare("INSERT INTO _app_migrations (key) VALUES ('pt_ready_for_payment')").run();
+  console.log('PT clients: migrated to READY_FOR_PAYMENT status');
 }
 
 export default db;
