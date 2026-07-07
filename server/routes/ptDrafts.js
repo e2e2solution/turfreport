@@ -201,15 +201,30 @@ router.post('/drafts/:draftId/reject', async (req, res) => {
   const draft = (drafts || []).find((d) => d.draft_id === req.params.draftId);
   if (!draft) return res.status(404).json({ error: 'Draft not found' });
 
-  const doc = {
-    ...draft,
-    status: 'rejected',
-    reject_reason: (req.body?.reason || '').trim(),
-    updated_at: new Date().toISOString(),
-  };
+  // If the draft edits an existing local client, revert the Mongo doc back to
+  // the canonical SQLite state so the trainer's rejected changes are discarded
+  // and they see the original client again (instead of it disappearing).
+  const localClient = draft.local_client_id
+    ? db.prepare(`
+        SELECT c.*, t.name AS trainer_name
+        FROM pt_clients c
+        JOIN pt_trainers t ON t.id = c.trainer_id
+        WHERE c.id = ?
+      `).get(draft.local_client_id)
+    : null;
+
+  const doc = localClient
+    ? buildClientDoc(localClient)
+    : {
+        ...draft,
+        status: 'rejected',
+        reject_reason: (req.body?.reason || '').trim(),
+        updated_at: new Date().toISOString(),
+      };
+
   const r = await persistDraftDoc(doc);
   if (!r.ok) return res.status(503).json({ error: r.error || 'Could not reject draft' });
-  res.json({ ok: true });
+  res.json({ ok: true, reverted: Boolean(localClient) });
 });
 
 router.post('/sync-trainers', async (_req, res) => {
