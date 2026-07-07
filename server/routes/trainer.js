@@ -19,9 +19,40 @@ import {
   listPtDraftsFromMongo,
   syncPtDraftToMongo,
 } from '../db/mongo.js';
+import { fetchPtDraftsFromCloud, pushPtDraftToCloud } from '../utils/cloudSync.js';
 import { parseNum } from '../utils/excel.js';
 
 const router = Router();
+
+/** Read drafts: local Mongo first, then Render cloud fallback (staff PC can't reach Atlas). */
+async function fetchTrainerDraftsFallback(status, trainerId) {
+  let drafts = await listPtDraftsFromMongo({ status, trainerId });
+  if (!drafts && process.env.CLOUD_SYNC_URL) {
+    const cloud = await fetchPtDraftsFromCloud({ status: 'all' });
+    if (cloud.ok) {
+      const wanted = Array.isArray(status) ? status : (status === 'all' ? null : [status]);
+      drafts = (cloud.drafts || []).filter((d) => {
+        if (d.trainer_id !== trainerId) return false;
+        if (!wanted) return true;
+        return wanted.includes(d.status);
+      });
+    }
+  }
+  return drafts;
+}
+
+/** Read a single draft: local Mongo first, then cloud fallback. */
+async function getDraftFallback(draftId, trainerId) {
+  let draft = await getPtDraftFromMongo(draftId);
+  if (!draft && process.env.CLOUD_SYNC_URL) {
+    const cloud = await fetchPtDraftsFromCloud({ status: 'all' });
+    if (cloud.ok) {
+      draft = (cloud.drafts || []).find((d) => d.draft_id === draftId) || null;
+    }
+  }
+  if (!draft || draft.trainer_id !== trainerId) return null;
+  return draft;
+}
 
 function findTrainerInSqlite(name) {
   return db.prepare(`
@@ -84,8 +115,13 @@ function statusAfterEdit(existing) {
 async function saveDraft(draft) {
   draft.updated_at = new Date().toISOString();
   const result = await syncPtDraftToMongo(draft);
-  if (!result.ok) throw new Error(result.error || 'Could not save draft to MongoDB');
-  return draft;
+  if (result.ok) return draft;
+  if (process.env.CLOUD_SYNC_URL) {
+    const cloud = await pushPtDraftToCloud(draft);
+    if (cloud.ok) return draft;
+    throw new Error(cloud.error || 'Could not save draft');
+  }
+  throw new Error(result.error || 'Could not save draft to MongoDB');
 }
 
 router.post('/login', async (req, res) => {
@@ -106,19 +142,17 @@ router.post('/login', async (req, res) => {
 });
 
 router.get('/drafts', trainerAuthMiddleware, async (req, res) => {
-  const drafts = await listPtDraftsFromMongo({
-    status: req.query.status || VISIBLE_STATUSES,
-    trainerId: req.trainer.id,
-  });
+  const drafts = await fetchTrainerDraftsFallback(
+    req.query.status || VISIBLE_STATUSES,
+    req.trainer.id,
+  );
   if (!drafts) return res.status(503).json({ error: 'MongoDB unavailable' });
   res.json(drafts.map(enrichDraft));
 });
 
 router.get('/drafts/:draftId', trainerAuthMiddleware, async (req, res) => {
-  const draft = await getPtDraftFromMongo(req.params.draftId);
-  if (!draft || draft.trainer_id !== req.trainer.id) {
-    return res.status(404).json({ error: 'Draft not found' });
-  }
+  const draft = await getDraftFallback(req.params.draftId, req.trainer.id);
+  if (!draft) return res.status(404).json({ error: 'Draft not found' });
   res.json(enrichDraft(draft));
 });
 
@@ -135,8 +169,8 @@ router.post('/drafts', trainerAuthMiddleware, async (req, res) => {
 });
 
 router.put('/drafts/:draftId', trainerAuthMiddleware, async (req, res) => {
-  const existing = await getPtDraftFromMongo(req.params.draftId);
-  if (!existing || existing.trainer_id !== req.trainer.id) {
+  const existing = await getDraftFallback(req.params.draftId, req.trainer.id);
+  if (!existing) {
     return res.status(404).json({ error: 'Draft not found' });
   }
   if (!VISIBLE_STATUSES.includes(existing.status)) {
@@ -171,8 +205,8 @@ router.put('/drafts/:draftId', trainerAuthMiddleware, async (req, res) => {
 });
 
 router.post('/drafts/:draftId/sessions/toggle', trainerAuthMiddleware, async (req, res) => {
-  const existing = await getPtDraftFromMongo(req.params.draftId);
-  if (!existing || existing.trainer_id !== req.trainer.id) {
+  const existing = await getDraftFallback(req.params.draftId, req.trainer.id);
+  if (!existing) {
     return res.status(404).json({ error: 'Draft not found' });
   }
   if (!VISIBLE_STATUSES.includes(existing.status) || existing.pt_status === 'READY_FOR_PAYMENT') {
@@ -208,8 +242,8 @@ router.post('/drafts/:draftId/sessions/toggle', trainerAuthMiddleware, async (re
 });
 
 router.post('/drafts/:draftId/ready', trainerAuthMiddleware, async (req, res) => {
-  const existing = await getPtDraftFromMongo(req.params.draftId);
-  if (!existing || existing.trainer_id !== req.trainer.id) {
+  const existing = await getDraftFallback(req.params.draftId, req.trainer.id);
+  if (!existing) {
     return res.status(404).json({ error: 'Draft not found' });
   }
   const draft = {
@@ -223,8 +257,8 @@ router.post('/drafts/:draftId/ready', trainerAuthMiddleware, async (req, res) =>
 });
 
 router.post('/drafts/:draftId/restart', trainerAuthMiddleware, async (req, res) => {
-  const existing = await getPtDraftFromMongo(req.params.draftId);
-  if (!existing || existing.trainer_id !== req.trainer.id) {
+  const existing = await getDraftFallback(req.params.draftId, req.trainer.id);
+  if (!existing) {
     return res.status(404).json({ error: 'Draft not found' });
   }
   const startDate = req.body?.start_date;
@@ -245,8 +279,8 @@ router.post('/drafts/:draftId/restart', trainerAuthMiddleware, async (req, res) 
 });
 
 router.delete('/drafts/:draftId', trainerAuthMiddleware, async (req, res) => {
-  const existing = await getPtDraftFromMongo(req.params.draftId);
-  if (!existing || existing.trainer_id !== req.trainer.id) {
+  const existing = await getDraftFallback(req.params.draftId, req.trainer.id);
+  if (!existing) {
     return res.status(404).json({ error: 'Draft not found' });
   }
   if (existing.status !== 'pending') {
