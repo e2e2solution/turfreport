@@ -3,7 +3,7 @@ import { authMiddleware } from '../middleware/auth.js';
 import {
   verifyOwnerPin, signOwnerToken, ownerAuthMiddleware,
 } from '../middleware/ownerAuth.js';
-import { syncReportToMongo, isMongoReady, getMongoError, syncCafeToMongo, listCafeMonthsFromMongo, getCafeReportFromMongo, syncReviewToMongo, getLatestUnreadReviewFromMongo, markReviewReadInMongo, listReviewsFromMongo, syncPtDraftToMongo, listPtDraftsFromMongo } from '../db/mongo.js';
+import { syncReportToMongo, isMongoReady, getMongoError, syncCafeToMongo, listCafeMonthsFromMongo, getCafeReportFromMongo, syncReviewToMongo, getLatestUnreadReviewFromMongo, markReviewReadInMongo, listReviewsFromMongo, syncPtDraftToMongo, listPtDraftsFromMongo, syncTrainerToMongo } from '../db/mongo.js';
 import { buildOwnerReportSnapshot } from '../utils/ownerReport.js';
 import { saveOwnerReport } from '../utils/ownerStore.js';
 import {
@@ -143,6 +143,23 @@ router.get('/pt-drafts', async (req, res) => {
     return res.status(503).json({ error: getMongoError() || 'MongoDB unavailable' });
   }
   res.json({ drafts });
+});
+
+router.post('/sync-trainer', async (req, res) => {
+  const key = req.headers['x-sync-key'];
+  if (!process.env.OWNER_SYNC_KEY || key !== process.env.OWNER_SYNC_KEY) {
+    return res.status(401).json({ error: 'Invalid sync key' });
+  }
+  const trainer = req.body;
+  if (!trainer?.id || !trainer?.name) {
+    return res.status(400).json({ error: 'Invalid trainer payload' });
+  }
+
+  const mongo = await syncTrainerToMongo(trainer);
+  if (!mongo.ok) {
+    return res.status(503).json({ error: mongo.error || 'MongoDB unavailable' });
+  }
+  res.json({ success: true, mongo_synced: true, trainer_id: trainer.id });
 });
 
 router.post('/push', authMiddleware, async (req, res) => {

@@ -1,7 +1,6 @@
 import { Router } from 'express';
 import {
   getPtDraftFromMongo,
-  isMongoReady,
   getMongoError,
   listPtDraftsFromMongo,
   syncPtDraftToMongo,
@@ -9,7 +8,7 @@ import {
   updatePtDraftStatusInMongo,
 } from '../db/mongo.js';
 import { applyPtDraftToSqlite } from '../utils/ptDraftApply.js';
-import { fetchPtDraftsFromCloud } from '../utils/cloudSync.js';
+import { fetchPtDraftsFromCloud, pushTrainerToCloud } from '../utils/cloudSync.js';
 import db from '../db.js';
 
 const router = Router();
@@ -86,15 +85,31 @@ router.post('/drafts/:draftId/reject', async (req, res) => {
 
 router.post('/sync-trainers', async (_req, res) => {
   const trainers = db.prepare('SELECT * FROM pt_trainers ORDER BY name COLLATE NOCASE ASC').all();
-  if (!isMongoReady()) {
-    return res.status(503).json({ error: getMongoError() || 'MongoDB unavailable' });
+  if (!trainers.length) {
+    return res.json({ synced: 0, total: 0, results: [], via: 'none' });
   }
+
   const results = [];
+  let via = 'mongo';
+  let lastError = '';
+
   for (const trainer of trainers) {
-    const r = await syncTrainerToMongo(trainer);
+    let r = await syncTrainerToMongo(trainer);
+    if (!r.ok && process.env.CLOUD_SYNC_URL) {
+      via = 'cloud';
+      r = await pushTrainerToCloud(trainer);
+    }
+    if (!r.ok) lastError = r.error || lastError;
     results.push({ id: trainer.id, name: trainer.name, ok: r.ok });
   }
-  res.json({ synced: results.filter((r) => r.ok).length, total: trainers.length, results });
+
+  const synced = results.filter((r) => r.ok).length;
+  if (synced === 0) {
+    return res.status(503).json({
+      error: lastError || getMongoError() || 'MongoDB unavailable and cloud sync not configured',
+    });
+  }
+  res.json({ synced, total: trainers.length, results, via });
 });
 
 export default router;

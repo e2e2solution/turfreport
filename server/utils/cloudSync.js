@@ -145,3 +145,28 @@ export async function fetchPtDraftsFromCloud({ status = 'pending' } = {}) {
     return { ok: false, error: err.message };
   }
 }
+
+export async function pushTrainerToCloud(trainer) {
+  const base = process.env.CLOUD_SYNC_URL?.replace(/\/$/, '');
+  const key = process.env.OWNER_SYNC_KEY;
+  if (!base || !key) {
+    return { ok: false, error: 'CLOUD_SYNC_URL or OWNER_SYNC_KEY not set in server/.env' };
+  }
+  try {
+    const res = await fetch(`${base}/api/owner/sync-trainer`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Sync-Key': key,
+      },
+      body: JSON.stringify(trainer),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      return { ok: false, error: data.error || `Trainer cloud sync failed (${res.status})` };
+    }
+    return { ok: true, url: base };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+}
