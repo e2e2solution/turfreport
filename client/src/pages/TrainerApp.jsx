@@ -7,6 +7,7 @@ import {
   getTrainerApiBase,
   getTrainerToken,
   markTrainerDraftReady,
+  reopenTrainerDraft,
   restartTrainerDraft,
   setTrainerApiBase,
   setTrainerToken,
@@ -198,9 +199,23 @@ export default function TrainerApp() {
     }
   };
 
+  const handleReopen = async () => {
+    if (!selected || !confirm('Undo ready for payment? Sessions become editable again.')) return;
+    setSaving(true);
+    try {
+      const updated = await reopenTrainerDraft(selected.draft_id);
+      setSelected(updated);
+      setDrafts((rows) => rows.map((d) => (d.draft_id === updated.draft_id ? updated : d)));
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleRestart = async () => {
     if (!selected || !restartDate) return;
-    if (!confirm(`Restart from ${formatDateDMY(restartDate)}?`)) return;
+    if (!confirm(`Reset to new month from ${formatDateDMY(restartDate)}? Sessions reset for the new cycle.`)) return;
     setSaving(true);
     try {
       const updated = await restartTrainerDraft(selected.draft_id, restartDate);
@@ -369,12 +384,15 @@ export default function TrainerApp() {
                 </button>
               ) : (
                 <>
+                  <button type="button" className="btn" onClick={handleReopen} disabled={saving}>
+                    Undo Ready for Payment
+                  </button>
                   <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    Restart from
+                    New month from
                     <input type="date" value={restartDate} onChange={(e) => setRestartDate(e.target.value)} />
                   </label>
                   <button type="button" className="btn primary" onClick={handleRestart} disabled={saving}>
-                    Restart PT
+                    Reset to New Month
                   </button>
                 </>
               )}

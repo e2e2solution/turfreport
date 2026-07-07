@@ -752,6 +752,10 @@ export async function markTrainerDraftReady(draftId) {
   return trainerRequest(trainerApi(`/drafts/${draftId}/ready`), { method: 'POST' });
 }
 
+export async function reopenTrainerDraft(draftId) {
+  return trainerRequest(trainerApi(`/drafts/${draftId}/reopen`), { method: 'POST' });
+}
+
 export async function restartTrainerDraft(draftId, startDate) {
   return trainerRequest(trainerApi(`/drafts/${draftId}/restart`), {
     method: 'POST',

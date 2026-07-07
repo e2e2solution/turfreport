@@ -256,6 +256,21 @@ router.post('/drafts/:draftId/ready', trainerAuthMiddleware, async (req, res) =>
   res.json(enrichDraft(draft));
 });
 
+router.post('/drafts/:draftId/reopen', trainerAuthMiddleware, async (req, res) => {
+  const existing = await getDraftFallback(req.params.draftId, req.trainer.id);
+  if (!existing) {
+    return res.status(404).json({ error: 'Draft not found' });
+  }
+  const draft = {
+    ...existing,
+    status: statusAfterEdit(existing),
+    pt_status: 'ACTIVE',
+    completed_at: null,
+  };
+  await saveDraft(draft);
+  res.json(enrichDraft(draft));
+});
+
 router.post('/drafts/:draftId/restart', trainerAuthMiddleware, async (req, res) => {
   const existing = await getDraftFallback(req.params.draftId, req.trainer.id);
   if (!existing) {
