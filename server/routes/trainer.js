@@ -73,6 +73,14 @@ function buildDraftBase(trainer, body = {}) {
   };
 }
 
+// Statuses a trainer can see/work with (everything except rejected).
+const VISIBLE_STATUSES = ['pending', 'confirmed', 'update_pending'];
+
+/** New client stays 'pending'; edits to an approved client become 'update_pending'. */
+function statusAfterEdit(existing) {
+  return existing.status === 'pending' ? 'pending' : 'update_pending';
+}
+
 async function saveDraft(draft) {
   draft.updated_at = new Date().toISOString();
   const result = await syncPtDraftToMongo(draft);
@@ -99,7 +107,7 @@ router.post('/login', async (req, res) => {
 
 router.get('/drafts', trainerAuthMiddleware, async (req, res) => {
   const drafts = await listPtDraftsFromMongo({
-    status: req.query.status || 'pending',
+    status: req.query.status || VISIBLE_STATUSES,
     trainerId: req.trainer.id,
   });
   if (!drafts) return res.status(503).json({ error: 'MongoDB unavailable' });
@@ -131,8 +139,8 @@ router.put('/drafts/:draftId', trainerAuthMiddleware, async (req, res) => {
   if (!existing || existing.trainer_id !== req.trainer.id) {
     return res.status(404).json({ error: 'Draft not found' });
   }
-  if (existing.status !== 'pending') {
-    return res.status(400).json({ error: 'Only pending drafts can be edited' });
+  if (!VISIBLE_STATUSES.includes(existing.status)) {
+    return res.status(400).json({ error: 'This client can no longer be edited' });
   }
 
   const b = req.body || {};
@@ -143,6 +151,7 @@ router.put('/drafts/:draftId', trainerAuthMiddleware, async (req, res) => {
   const planType = b.plan_type ?? existing.plan_type;
   const draft = {
     ...existing,
+    status: statusAfterEdit(existing),
     client_name: b.client_name !== undefined ? b.client_name.trim() : existing.client_name,
     pt_goal: b.pt_goal ?? existing.pt_goal,
     plan_type: planType,
@@ -166,8 +175,8 @@ router.post('/drafts/:draftId/sessions/toggle', trainerAuthMiddleware, async (re
   if (!existing || existing.trainer_id !== req.trainer.id) {
     return res.status(404).json({ error: 'Draft not found' });
   }
-  if (existing.status !== 'pending' || existing.pt_status === 'READY_FOR_PAYMENT') {
-    return res.status(400).json({ error: 'Sessions locked for this draft' });
+  if (!VISIBLE_STATUSES.includes(existing.status) || existing.pt_status === 'READY_FOR_PAYMENT') {
+    return res.status(400).json({ error: 'Sessions locked for this client' });
   }
 
   const { session_date: sessionDate, checked } = req.body || {};
@@ -189,7 +198,7 @@ router.post('/drafts/:draftId/sessions/toggle', trainerAuthMiddleware, async (re
     sessions = sessions.filter((s) => s.session_date !== sessionDate);
   }
 
-  const draft = { ...existing, sessions };
+  const draft = { ...existing, status: statusAfterEdit(existing), sessions };
   if (target && sessions.length >= target) {
     draft.pt_status = 'READY_FOR_PAYMENT';
     draft.completed_at = sessionDate;
@@ -205,6 +214,7 @@ router.post('/drafts/:draftId/ready', trainerAuthMiddleware, async (req, res) =>
   }
   const draft = {
     ...existing,
+    status: statusAfterEdit(existing),
     pt_status: 'READY_FOR_PAYMENT',
     completed_at: todayISO(),
   };
@@ -222,6 +232,7 @@ router.post('/drafts/:draftId/restart', trainerAuthMiddleware, async (req, res) 
 
   const draft = {
     ...existing,
+    status: statusAfterEdit(existing),
     start_date: startDate,
     base_end_date: calcPtBaseEndDate(startDate, existing.plan_type),
     pt_status: 'ACTIVE',
@@ -255,6 +266,8 @@ function enrichDraft(draft) {
     session_target: target,
     sessions_remaining: target != null ? Math.max(0, target - completed) : null,
     current_end_date: draft.base_end_date,
+    awaiting_approval: draft.status === 'pending' || draft.status === 'update_pending',
+    from_dashboard: draft.origin === 'staff',
   };
 }
 

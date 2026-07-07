@@ -132,7 +132,8 @@ export async function fetchPtDraftsFromCloud({ status = 'pending' } = {}) {
     return { ok: false, error: 'CLOUD_SYNC_URL or OWNER_SYNC_KEY not set' };
   }
   try {
-    const qs = status ? `?status=${encodeURIComponent(status)}` : '';
+    const statusParam = Array.isArray(status) ? status.join(',') : status;
+    const qs = statusParam ? `?status=${encodeURIComponent(statusParam)}` : '';
     const res = await fetch(`${base}/api/owner/pt-drafts${qs}`, {
       headers: { 'X-Sync-Key': key },
     });

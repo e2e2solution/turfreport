@@ -269,6 +269,14 @@ export default function TrainerApp() {
                       {draft.session_target ? ` / ${draft.session_target}` : ''}
                     </span>
                   </div>
+                  <div className="card-meta">
+                    {draft.awaiting_approval ? (
+                      <span className="badge pending">Waiting for staff approval</span>
+                    ) : (
+                      <span className="badge closed">Synced</span>
+                    )}
+                    {draft.from_dashboard && <span>From dashboard</span>}
+                  </div>
                 </button>
               ))}
             </div>
@@ -319,6 +327,12 @@ export default function TrainerApp() {
             <button type="button" className="btn small" onClick={() => { setView('list'); setSelected(null); }}>Back</button>
           </div>
           <p className="hint">{ptPlanLabel(selected.plan_type)} · {ptGoalLabel(selected.pt_goal)}</p>
+
+          {selected.awaiting_approval && (
+            <div className="alert" style={{ background: '#fef3c7', color: '#92400e' }}>
+              Changes are saved and waiting for staff to approve on the dashboard.
+            </div>
+          )}
 
           <div className="card">
             <div className="stat-grid">

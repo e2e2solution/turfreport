@@ -5,6 +5,7 @@ import {
   fetchPtDrafts,
   formatCurrency,
   formatDateDMY,
+  publishPtClientsToCloud,
   rejectPtDraft,
   syncPtTrainersToCloud,
 } from '../api';
@@ -15,6 +16,7 @@ export default function PtDraftInbox({ onConfirmed }) {
   const [loading, setLoading] = useState(false);
   const [actingId, setActingId] = useState(null);
   const [syncing, setSyncing] = useState(false);
+  const [publishing, setPublishing] = useState(false);
 
   const load = () => {
     setLoading(true);
@@ -51,8 +53,23 @@ export default function PtDraftInbox({ onConfirmed }) {
     }
   };
 
+  const handlePublishClients = async () => {
+    setPublishing(true);
+    try {
+      const result = await publishPtClientsToCloud();
+      alert(`Published ${result.published} client(s) to trainers (${result.skipped} pending changes kept)`);
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setPublishing(false);
+    }
+  };
+
   const handleConfirm = async (draft) => {
-    if (!confirm(`Add ${draft.client_name} to local PT (${draft.trainer_name})?`)) return;
+    const action = draft.is_update
+      ? `Apply ${draft.client_name}'s session updates to local PT?`
+      : `Add ${draft.client_name} to local PT (${draft.trainer_name})?`;
+    if (!confirm(action)) return;
     setActingId(draft.draft_id);
     try {
       await confirmPtDraft(draft.draft_id);
@@ -82,10 +99,13 @@ export default function PtDraftInbox({ onConfirmed }) {
   return (
     <div className="card pt-draft-inbox">
       <div className="card-title-row">
-        <h3>Trainer drafts (MongoDB)</h3>
+        <h3>Trainer drafts &amp; updates</h3>
         <div className="pt-draft-inbox-actions">
           <button type="button" className="btn small" onClick={handleSyncTrainers} disabled={syncing}>
             {syncing ? '...' : 'Sync trainers'}
+          </button>
+          <button type="button" className="btn small" onClick={handlePublishClients} disabled={publishing}>
+            {publishing ? '...' : 'Publish clients'}
           </button>
           <button type="button" className="btn small primary" onClick={handleCollect} disabled={loading}>
             Collect drafts
@@ -93,7 +113,9 @@ export default function PtDraftInbox({ onConfirmed }) {
         </div>
       </div>
       <p className="hint">
-        Trainers save clients on the trainer app. Collect drafts here, then confirm each client to add to local DB.
+        <strong>Publish clients</strong> sends dashboard clients to trainers. Trainers add clients and mark
+        sessions on their app; <strong>Collect drafts</strong> pulls new clients and session updates here, then
+        confirm each to reflect in the local DB.
       </p>
 
       {loading ? (
@@ -106,7 +128,12 @@ export default function PtDraftInbox({ onConfirmed }) {
             <div key={draft.draft_id} className="booking-card">
               <div className="card-top">
                 <strong>{draft.client_name}</strong>
-                <span className="badge pending">{ptStatusLabel(draft.pt_status)}</span>
+                <span className={`badge ${draft.is_update ? 'pending' : 'closed'}`}>
+                  {draft.is_update ? 'Session update' : 'New client'}
+                </span>
+              </div>
+              <div className="card-meta">
+                <span>Status: {ptStatusLabel(draft.pt_status)}</span>
               </div>
               <div className="card-meta">
                 <span>Trainer: {draft.trainer_name}</span>
@@ -128,7 +155,7 @@ export default function PtDraftInbox({ onConfirmed }) {
                   disabled={actingId === draft.draft_id}
                   onClick={() => handleConfirm(draft)}
                 >
-                  {actingId === draft.draft_id ? '...' : 'Confirm'}
+                  {actingId === draft.draft_id ? '...' : (draft.is_update ? 'Approve update' : 'Confirm')}
                 </button>
                 <button
                   type="button"

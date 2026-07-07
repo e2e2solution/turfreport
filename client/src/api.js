@@ -784,3 +784,7 @@ export async function rejectPtDraft(draftId, reason = '') {
 export async function syncPtTrainersToCloud() {
   return request(`${API_PT}/sync-trainers`, { method: 'POST' });
 }
+
+export async function publishPtClientsToCloud() {
+  return request(`${API_PT}/publish-clients`, { method: 'POST' });
+}

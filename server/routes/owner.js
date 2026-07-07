@@ -137,7 +137,8 @@ router.get('/pt-drafts', async (req, res) => {
   if (!process.env.OWNER_SYNC_KEY || key !== process.env.OWNER_SYNC_KEY) {
     return res.status(401).json({ error: 'Invalid sync key' });
   }
-  const status = req.query.status || 'pending';
+  const raw = req.query.status || 'pending';
+  const status = raw === 'all' ? 'all' : (raw.includes(',') ? raw.split(',') : raw);
   const drafts = await listPtDraftsFromMongo({ status });
   if (!drafts) {
     return res.status(503).json({ error: getMongoError() || 'MongoDB unavailable' });

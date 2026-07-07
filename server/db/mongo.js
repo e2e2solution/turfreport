@@ -295,7 +295,9 @@ export async function listPtDraftsFromMongo({ status = 'pending', trainerId } = 
   }
   try {
     const filter = {};
-    if (status) filter.status = status;
+    if (status && status !== 'all') {
+      filter.status = Array.isArray(status) ? { $in: status } : status;
+    }
     if (trainerId) filter.trainer_id = trainerId;
     return getOwnerDb().collection('pt_client_drafts')
       .find(filter)
