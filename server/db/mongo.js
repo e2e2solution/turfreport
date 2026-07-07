@@ -276,9 +276,10 @@ export async function syncPtDraftToMongo(draft) {
     if (!connected) return { ok: false, error: lastError };
   }
   try {
+    const { _id, ...payload } = draft;
     await getOwnerDb().collection('pt_client_drafts').updateOne(
-      { draft_id: draft.draft_id },
-      { $set: draft },
+      { draft_id: payload.draft_id },
+      { $set: payload },
       { upsert: true },
     );
     return { ok: true };

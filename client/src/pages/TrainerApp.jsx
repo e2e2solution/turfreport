@@ -19,6 +19,7 @@ import {
 } from '../api';
 import AppLogo from '../components/AppLogo';
 import PTSessionCalendar from '../components/PTSessionCalendar';
+import Toast from '../components/Toast';
 import {
   PT_GOAL_OPTIONS,
   PT_PLAN_OPTIONS,
@@ -97,15 +98,30 @@ function TrainerLogin({ onSuccess }) {
   );
 }
 
+function trainerNameFromToken() {
+  const token = getTrainerToken();
+  if (!token) return '';
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    return payload.trainer_name || '';
+  } catch {
+    return '';
+  }
+}
+
 export default function TrainerApp() {
   const [loggedIn, setLoggedIn] = useState(Boolean(getTrainerToken()));
-  const [trainerName, setTrainerName] = useState('');
+  const [trainerName, setTrainerName] = useState(trainerNameFromToken());
   const [view, setView] = useState('list');
   const [drafts, setDrafts] = useState([]);
   const [selected, setSelected] = useState(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [toast, setToast] = useState({ message: '', type: 'success' });
   const [restartDate, setRestartDate] = useState(todayISO());
+
+  const showToast = (message, type = 'success') => setToast({ message, type });
+  const draftNote = ' — saved as draft, waiting for staff approval';
   const [form, setForm] = useState({
     client_name: '',
     pt_goal: PT_GOAL_OPTIONS[0].value,
@@ -119,7 +135,7 @@ export default function TrainerApp() {
     setLoading(true);
     fetchTrainerDrafts()
       .then(setDrafts)
-      .catch((err) => alert(err.message))
+      .catch((err) => showToast(err.message, 'error'))
       .finally(() => setLoading(false));
   };
 
@@ -148,8 +164,9 @@ export default function TrainerApp() {
         notes: '',
       });
       openDraft(draft);
+      showToast(`${draft.client_name} added${draftNote}`);
     } catch (err) {
-      alert(err.message);
+      showToast(err.message, 'error');
     } finally {
       setSaving(false);
     }
@@ -162,8 +179,9 @@ export default function TrainerApp() {
       const updated = await toggleTrainerDraftSession(selected.draft_id, dateISO, checked);
       setSelected(updated);
       setDrafts((rows) => rows.map((d) => (d.draft_id === updated.draft_id ? updated : d)));
+      showToast(`Session ${checked ? 'marked' : 'removed'}${draftNote}`);
     } catch (err) {
-      alert(err.message);
+      showToast(err.message, 'error');
     } finally {
       setSaving(false);
     }
@@ -178,8 +196,9 @@ export default function TrainerApp() {
       const updated = await updateTrainerDraft(selected.draft_id, payload);
       setSelected(updated);
       setDrafts((rows) => rows.map((d) => (d.draft_id === updated.draft_id ? updated : d)));
+      showToast(`Details updated${draftNote}`);
     } catch (err) {
-      alert(err.message);
+      showToast(err.message, 'error');
     } finally {
       setSaving(false);
     }
@@ -192,8 +211,9 @@ export default function TrainerApp() {
       const updated = await markTrainerDraftReady(selected.draft_id);
       setSelected(updated);
       setDrafts((rows) => rows.map((d) => (d.draft_id === updated.draft_id ? updated : d)));
+      showToast(`Marked ready for payment${draftNote}`);
     } catch (err) {
-      alert(err.message);
+      showToast(err.message, 'error');
     } finally {
       setSaving(false);
     }
@@ -206,8 +226,9 @@ export default function TrainerApp() {
       const updated = await reopenTrainerDraft(selected.draft_id);
       setSelected(updated);
       setDrafts((rows) => rows.map((d) => (d.draft_id === updated.draft_id ? updated : d)));
+      showToast(`Undo ready for payment${draftNote}`);
     } catch (err) {
-      alert(err.message);
+      showToast(err.message, 'error');
     } finally {
       setSaving(false);
     }
@@ -221,8 +242,9 @@ export default function TrainerApp() {
       const updated = await restartTrainerDraft(selected.draft_id, restartDate);
       setSelected(updated);
       setDrafts((rows) => rows.map((d) => (d.draft_id === updated.draft_id ? updated : d)));
+      showToast(`Reset to new month${draftNote}`);
     } catch (err) {
-      alert(err.message);
+      showToast(err.message, 'error');
     } finally {
       setSaving(false);
     }
@@ -243,6 +265,11 @@ export default function TrainerApp() {
 
   return (
     <div className="owner-app page">
+      <Toast
+        message={toast.message}
+        type={toast.type}
+        onClose={() => setToast({ message: '', type: 'success' })}
+      />
       <header className="owner-brand-header">
         <div className="owner-brand-title">
           <AppLogo className="app-logo-owner" />

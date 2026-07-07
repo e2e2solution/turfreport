@@ -31,11 +31,13 @@ async function fetchTrainerDraftsFallback(status, trainerId) {
     const cloud = await fetchPtDraftsFromCloud({ status: 'all' });
     if (cloud.ok) {
       const wanted = Array.isArray(status) ? status : (status === 'all' ? null : [status]);
-      drafts = (cloud.drafts || []).filter((d) => {
-        if (d.trainer_id !== trainerId) return false;
-        if (!wanted) return true;
-        return wanted.includes(d.status);
-      });
+      drafts = (cloud.drafts || [])
+        .filter((d) => {
+          if (d.trainer_id !== trainerId) return false;
+          if (!wanted) return true;
+          return wanted.includes(d.status);
+        })
+        .map(({ _id, ...rest }) => rest);
     }
   }
   return drafts;
@@ -51,7 +53,8 @@ async function getDraftFallback(draftId, trainerId) {
     }
   }
   if (!draft || draft.trainer_id !== trainerId) return null;
-  return draft;
+  const { _id, ...rest } = draft;
+  return rest;
 }
 
 function findTrainerInSqlite(name) {
@@ -113,6 +116,9 @@ function statusAfterEdit(existing) {
 }
 
 async function saveDraft(draft) {
+  // Drafts pulled via the cloud fallback carry Mongo's immutable _id; strip it
+  // so upserts don't fail with "would modify the immutable field '_id'".
+  delete draft._id;
   draft.updated_at = new Date().toISOString();
   const result = await syncPtDraftToMongo(draft);
   if (result.ok) return draft;
