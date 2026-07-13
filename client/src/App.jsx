@@ -18,6 +18,9 @@ import PTTrainerDetail from './pages/PTTrainerDetail';
 import PTClientDetail from './pages/PTClientDetail';
 import PTReport from './pages/PTReport';
 import CafeReport from './pages/CafeReport';
+import FootballCoachingReport from './pages/FootballCoachingReport';
+import OnlineMatchReport from './pages/OnlineMatchReport';
+import TurfMatchReport from './pages/TurfMatchReport';
 
 function AppRoutes() {
   return (
@@ -33,6 +36,9 @@ function AppRoutes() {
               <Route path="/bookings" element={<Bookings />} />
               <Route path="/edit/:type/:id" element={<EditBooking />} />
               <Route path="/report" element={<Report />} />
+              <Route path="/football-coaching" element={<FootballCoachingReport />} />
+              <Route path="/online-report" element={<OnlineMatchReport />} />
+              <Route path="/turf-report" element={<TurfMatchReport />} />
               <Route path="/bulk" element={<BulkList />} />
               <Route path="/bulk/add" element={<AddBulk />} />
               <Route path="/bulk/:id" element={<BulkDetail />} />

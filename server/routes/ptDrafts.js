@@ -91,6 +91,56 @@ function buildClientDoc(client) {
   };
 }
 
+/** Apply a draft to SQLite and re-publish as confirmed in Mongo. */
+async function confirmDraftToSqlite(draft) {
+  const { clientId, trainerId } = applyPtDraftToSqlite(draft);
+  const client = db.prepare(`
+    SELECT c.*, t.name AS trainer_name
+    FROM pt_clients c JOIN pt_trainers t ON t.id = c.trainer_id
+    WHERE c.id = ?
+  `).get(clientId);
+
+  const confirmedDoc = buildClientDoc(client);
+  await persistDraftDoc(confirmedDoc);
+
+  if (draft.draft_id !== confirmedDoc.draft_id) {
+    await persistDraftDoc({
+      ...draft,
+      status: 'rejected',
+      superseded_by: confirmedDoc.draft_id,
+      updated_at: new Date().toISOString(),
+    });
+  }
+
+  return { clientId, trainerId, client };
+}
+
+function isTrainerCompletedDraft(draft) {
+  return draft.pt_status === 'READY_FOR_PAYMENT';
+}
+
+async function splitAndApplyDrafts(drafts) {
+  const autoApplied = [];
+  const pending = [];
+  const errors = [];
+
+  for (const draft of drafts || []) {
+    if (isTrainerCompletedDraft(draft)) {
+      try {
+        await confirmDraftToSqlite(draft);
+        autoApplied.push(draft);
+      } catch (err) {
+        errors.push({ draft_id: draft.draft_id, client_name: draft.client_name, error: err.message });
+        pending.push(draft);
+      }
+    } else {
+      pending.push(draft);
+    }
+  }
+
+  return { autoApplied, pending, errors };
+}
+
 /** Push all local PT clients to the cloud so trainers can see them. */
 router.post('/publish-clients', async (req, res) => {
   const trainerId = req.query.trainer_id;
@@ -151,13 +201,50 @@ router.post('/drafts/collect', async (_req, res) => {
   if (!drafts) {
     return res.status(503).json({ error: getMongoError() || 'Could not collect drafts' });
   }
-  // Mirror cloud drafts into local Mongo when available.
   if (via === 'cloud') {
     for (const draft of drafts) {
       await syncPtDraftToMongo(draft);
     }
   }
-  res.json({ count: drafts.length, source: via, drafts: drafts.map(enrichDraft) });
+
+  const { autoApplied, pending, errors } = await splitAndApplyDrafts(drafts);
+
+  res.json({
+    count: pending.length,
+    auto_applied: autoApplied.length,
+    auto_applied_clients: autoApplied.map((d) => d.client_name),
+    errors,
+    source: via,
+    drafts: pending.map(enrichDraft),
+  });
+});
+
+/** Auto-apply trainer-completed (ready for payment) drafts without staff approval. */
+router.post('/drafts/sync-ready', async (_req, res) => {
+  const { drafts, via } = await fetchDrafts(REVIEW_STATUSES);
+  if (!drafts) {
+    return res.status(503).json({ error: getMongoError() || 'Could not sync ready drafts' });
+  }
+
+  const readyDrafts = drafts.filter(isTrainerCompletedDraft);
+  if (!readyDrafts.length) {
+    return res.json({ auto_applied: 0, auto_applied_clients: [], errors: [], source: via });
+  }
+
+  if (via === 'cloud') {
+    for (const draft of readyDrafts) {
+      await syncPtDraftToMongo(draft);
+    }
+  }
+
+  const { autoApplied, errors } = await splitAndApplyDrafts(readyDrafts);
+
+  res.json({
+    auto_applied: autoApplied.length,
+    auto_applied_clients: autoApplied.map((d) => d.client_name),
+    errors,
+    source: via,
+  });
 });
 
 router.post('/drafts/:draftId/confirm', async (req, res) => {
@@ -167,29 +254,12 @@ router.post('/drafts/:draftId/confirm', async (req, res) => {
   if (!REVIEW_STATUSES.includes(draft.status)) {
     return res.status(400).json({ error: 'Draft is not awaiting approval' });
   }
+  if (isTrainerCompletedDraft(draft)) {
+    return res.status(400).json({ error: 'Trainer completed this PT — use auto-sync instead' });
+  }
 
   try {
-    const { clientId, trainerId } = applyPtDraftToSqlite(draft);
-    const client = db.prepare(`
-      SELECT c.*, t.name AS trainer_name
-      FROM pt_clients c JOIN pt_trainers t ON t.id = c.trainer_id
-      WHERE c.id = ?
-    `).get(clientId);
-
-    // Re-publish as a canonical confirmed client doc.
-    const confirmedDoc = buildClientDoc(client);
-    await persistDraftDoc(confirmedDoc);
-
-    // Drop the old doc if it used a non-canonical id (new trainer draft).
-    if (draft.draft_id !== confirmedDoc.draft_id) {
-      await persistDraftDoc({
-        ...draft,
-        status: 'rejected',
-        superseded_by: confirmedDoc.draft_id,
-        updated_at: new Date().toISOString(),
-      });
-    }
-
+    const { clientId, trainerId } = await confirmDraftToSqlite(draft);
     res.json({ ok: true, client_id: clientId, trainer_id: trainerId });
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -261,6 +331,7 @@ function enrichDraft(draft) {
   const completed = (draft.sessions || []).length;
   const paid = (draft.advance_gpay || 0) + (draft.advance_cash || 0)
     + (draft.balance_gpay || 0) + (draft.balance_cash || 0);
+  const autoReady = isTrainerCompletedDraft(draft);
   return {
     ...draft,
     completed_sessions: completed,
@@ -268,6 +339,8 @@ function enrichDraft(draft) {
     sessions_remaining: target != null ? Math.max(0, target - completed) : null,
     amount_due: Math.max(0, (draft.total_amount || 0) - paid),
     is_update: draft.status === 'update_pending',
+    is_auto_ready: autoReady,
+    needs_approval: !autoReady,
   };
 }
 

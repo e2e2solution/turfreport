@@ -285,6 +285,24 @@ router.post('/drafts/:draftId/restart', trainerAuthMiddleware, async (req, res) 
   const startDate = req.body?.start_date;
   if (!startDate) return res.status(400).json({ error: 'start_date is required' });
 
+  const hadCycle = (existing.sessions || []).length > 0 || existing.pt_status === 'READY_FOR_PAYMENT';
+  const previousCycle = hadCycle ? {
+    start_date: existing.start_date,
+    base_end_date: existing.base_end_date,
+    pt_status: existing.pt_status,
+    completed_at: existing.completed_at,
+    total_amount: existing.total_amount,
+    advance_gpay: existing.advance_gpay,
+    advance_cash: existing.advance_cash,
+    advance_date: existing.advance_date,
+    balance_gpay: existing.balance_gpay,
+    balance_cash: existing.balance_cash,
+    balance_date: existing.balance_date,
+    notes: existing.notes,
+    sessions: [...(existing.sessions || [])],
+    freezes: [...(existing.freezes || [])],
+  } : null;
+
   const draft = {
     ...existing,
     status: statusAfterEdit(existing),
@@ -294,6 +312,7 @@ router.post('/drafts/:draftId/restart', trainerAuthMiddleware, async (req, res) 
     completed_at: null,
     sessions: [],
     freezes: [],
+    previous_cycle: previousCycle,
   };
   await saveDraft(draft);
   res.json(enrichDraft(draft));

@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { createPtTrainer, deletePtClient, fetchPtClients, fetchPtTrainers, formatCurrency, undoPtComplete } from '../api';
 import PtDraftInbox from '../components/PtDraftInbox';
+import { downloadElementImage } from '../utils/captureImage';
 import { ptStatusLabel } from '../utils/pt';
 
 const emptyTrainer = {
@@ -21,6 +22,8 @@ export default function PTDashboard() {
   const [undoingId, setUndoingId] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [downloading, setDownloading] = useState(false);
+  const readyImageRef = useRef(null);
 
   const load = () => {
     setLoading(true);
@@ -88,6 +91,37 @@ export default function PTDashboard() {
   const readyCount = clients.filter((c) => c.status === 'READY_FOR_PAYMENT').length;
   const selectedTrainer = trainers.find((t) => String(t.id) === trainerId);
 
+  const readyByTrainer = useMemo(() => {
+    const groups = new Map();
+    for (const client of clients) {
+      const key = client.trainer_name || 'Unknown';
+      if (!groups.has(key)) {
+        groups.set(key, { trainer_name: key, clients: [], total_due: 0 });
+      }
+      const group = groups.get(key);
+      group.clients.push(client);
+      group.total_due += client.amount_due || 0;
+    }
+    return [...groups.values()].sort((a, b) => a.trainer_name.localeCompare(b.trainer_name));
+  }, [clients]);
+
+  const grandTotalDue = useMemo(
+    () => readyByTrainer.reduce((sum, g) => sum + g.total_due, 0),
+    [readyByTrainer],
+  );
+
+  const handleDownloadReadyImage = async () => {
+    if (!readyImageRef.current) return;
+    setDownloading(true);
+    try {
+      await downloadElementImage(readyImageRef.current, `pt-ready-for-payment-${new Date().toISOString().slice(0, 10)}.png`);
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setDownloading(false);
+    }
+  };
+
   return (
     <div className="page">
       <div className="card-title-row">
@@ -138,13 +172,98 @@ export default function PTDashboard() {
         </div>
 
         <h3>
-          {selectedTrainer ? `${selectedTrainer.name} — Clients` : 'All PT Clients'}
+          {status === 'READY_FOR_PAYMENT'
+            ? (selectedTrainer ? `${selectedTrainer.name} — Ready for Payment` : 'Ready for Payment — All Trainers')
+            : (selectedTrainer ? `${selectedTrainer.name} — Clients` : 'All PT Clients')}
         </h3>
+
+        {status === 'READY_FOR_PAYMENT' && clients.length > 0 && (
+          <div className="pt-ready-actions">
+            <button
+              type="button"
+              className="btn small primary"
+              onClick={handleDownloadReadyImage}
+              disabled={downloading}
+            >
+              {downloading ? 'Preparing...' : 'Download as image'}
+            </button>
+          </div>
+        )}
 
         {loading ? (
           <p className="muted">Loading...</p>
         ) : !clients.length ? (
           <p className="muted">No PT clients found for this filter.</p>
+        ) : status === 'READY_FOR_PAYMENT' ? (
+          <div ref={readyImageRef} className="pt-ready-image-wrap">
+            <div className="pt-ready-image-header">
+              <h4>Vathiyayath Sports Hub — PT Ready for Payment</h4>
+              <p>{new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
+            </div>
+            {readyByTrainer.map((group) => (
+              <div key={group.trainer_name} className="pt-ready-trainer-group">
+                <div className="pt-ready-trainer-head">
+                  <strong>{group.trainer_name}</strong>
+                  <span>{group.clients.length} client(s) · Total due {formatCurrency(group.total_due)}</span>
+                </div>
+                <table className="pt-client-table pt-ready-table">
+                  <thead>
+                    <tr>
+                      <th>Client</th>
+                      <th>Plan</th>
+                      <th>Period</th>
+                      <th>Sessions</th>
+                      <th>Amount due</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {group.clients.map((client) => (
+                      <tr key={client.id}>
+                        <td>
+                          <Link
+                            to={`/pt/clients/${client.client_id || client.id}`}
+                            className="pt-client-link"
+                          >
+                            <strong>{client.client_name}</strong>
+                            {client.record_type === 'cycle' && (
+                              <small> · Completed cycle</small>
+                            )}
+                          </Link>
+                        </td>
+                        <td>{client.plan_label}</td>
+                        <td>{client.cycle_period || `${client.start_date} → ${client.current_end_date || client.base_end_date}`}</td>
+                        <td>
+                          {client.session_target != null
+                            ? `${client.completed_sessions} / ${client.session_target}`
+                            : client.completed_sessions}
+                        </td>
+                        <td className={client.amount_due > 0 ? 'pt-due-amount' : ''}>
+                          {formatCurrency(client.amount_due)}
+                        </td>
+                        <td className="pt-client-actions">
+                          {client.record_type !== 'cycle' && (
+                            <button
+                              type="button"
+                              className="btn small"
+                              disabled={undoingId === client.id}
+                              onClick={() => handleUndoReadyForPayment(client.id, client.client_name)}
+                            >
+                              {undoingId === client.id ? '...' : 'Undo'}
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ))}
+            <div className="pt-ready-grand-total">
+              <strong>Grand total due</strong>
+              <strong>{formatCurrency(grandTotalDue)}</strong>
+            </div>
+          </div>
         ) : (
           <div className="pt-client-table-wrap">
             <table className="pt-client-table">

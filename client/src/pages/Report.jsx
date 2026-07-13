@@ -494,6 +494,15 @@ export default function Report() {
               <button type="button" className="btn small whatsapp" disabled={downloading} onClick={() => handleShareImage({ match_date: previewDate, section: 'gym' }, matchPreview)}>
                 WhatsApp: Gym only
               </button>
+              <button type="button" className="btn small" disabled={downloading} onClick={() => handleDownload({ match_date: previewDate, section: 'football_coaching' })}>
+                Excel: Football Coaching
+              </button>
+              <button type="button" className="btn small secondary" disabled={downloading} onClick={() => handleDownloadImage({ match_date: previewDate, section: 'football_coaching' }, matchPreview)}>
+                Image: Football Coaching
+              </button>
+              <button type="button" className="btn small whatsapp" disabled={downloading} onClick={() => handleShareImage({ match_date: previewDate, section: 'football_coaching' }, matchPreview)}>
+                WhatsApp: Football Coaching
+              </button>
             </div>
           </div>
         )}
@@ -590,6 +599,37 @@ export default function Report() {
             ? handleShareImage(gymPaymentParams({ match_date: undefined, from: gymPaymentFrom, to: gymPaymentTo }))
             : alert('Select dates')}
         />
+      </div>
+
+      <div className="card highlight-payment">
+        <h3>Football Coaching — Month Report</h3>
+        <p className="hint">
+          Separate coaching list with month filter and image download.
+          Open the full page for paid-in-month vs coaching-month views.
+        </p>
+        <Link to="/football-coaching" className="btn primary">
+          Open Football Coaching Report
+        </Link>
+      </div>
+
+      <div className="card highlight-payment">
+        <h3>Online Match — Month Report</h3>
+        <p className="hint">
+          Online bookings for a full month — by match date or payments — with image / Excel download.
+        </p>
+        <Link to="/online-report" className="btn primary">
+          Open Online Match Report
+        </Link>
+      </div>
+
+      <div className="card highlight-payment">
+        <h3>Turf Match — Month Report</h3>
+        <p className="hint">
+          Turf bookings for a full month — by match date or payments — with image / Excel download.
+        </p>
+        <Link to="/turf-report" className="btn primary">
+          Open Turf Match Report
+        </Link>
       </div>
 
       <div className="card">

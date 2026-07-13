@@ -121,7 +121,7 @@ export default function BulkDetail() {
   };
 
   const handleReopen = async () => {
-    if (!confirm('Reopen this bulk to add more sessions? Payment already recorded will stay the same.')) return;
+    if (!confirm('Reopen this bulk to add more sessions? You can edit payment on the Payment tab.')) return;
     setSaving(true);
     try {
       await reopenBulkPackage(id);
@@ -134,13 +134,27 @@ export default function BulkDetail() {
     }
   };
 
-  const handleCloseAgain = async () => {
-    if (!confirm('Close this bulk again? No new payment — existing payment is kept.')) return;
+  const handleCloseAgain = async (e) => {
+    e?.preventDefault?.();
+    if (!confirm('Close this bulk again? Payment changes will be saved.')) return;
     setSaving(true);
     try {
-      await closeBulkPackage(id);
+      await closeBulkPackage(id, payForm);
       load();
       setTab('payment');
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSavePayment = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      await updateBulkPackage(id, payForm);
+      load();
     } catch (err) {
       alert(err.message);
     } finally {
@@ -263,6 +277,25 @@ export default function BulkDetail() {
                 {saving ? 'Closing...' : 'Close & Record Payment'}
               </button>
             </form>
+          ) : isPending && hasPayment ? (
+            <form className="form" onSubmit={handleCloseAgain}>
+              <p className="hint">
+                Bulk reopened — you can edit payment below. Add sessions in Matches tab, then close again when done.
+              </p>
+              <label>Total Amount *
+                <input type="number" value={payForm.total_amount} onChange={(e) => setPay('total_amount', e.target.value)} required min="0" />
+              </label>
+              <PaymentSection title="Advance Paid" className="advance" gpayField="advance_gpay" cashField="advance_cash" dateField="advance_date" form={payForm} set={setPay} />
+              <PaymentSection title="Balance Paid" className="balance" gpayField="balance_gpay" cashField="balance_cash" dateField="balance_date" form={payForm} set={setPay} />
+              <div className="card-actions" style={{ marginTop: 12 }}>
+                <button type="button" className="btn" disabled={saving} onClick={handleSavePayment}>
+                  {saving ? 'Saving...' : 'Save Payment'}
+                </button>
+                <button type="submit" className="btn primary" disabled={saving}>
+                  {saving ? 'Closing...' : 'Close Again'}
+                </button>
+              </div>
+            </form>
           ) : (
             <>
               <div className="daily-total" style={{ color: 'inherit' }}>
@@ -274,16 +307,6 @@ export default function BulkDetail() {
                 <div className="total-row"><span>Balance Cash</span><strong>{formatCurrency(data.balance_cash)}</strong></div>
                 <div className="total-row"><span>Balance Date</span><strong>{formatDateDMY(data.balance_date)}</strong></div>
               </div>
-              {isPending && hasPayment && (
-                <p className="hint" style={{ marginTop: 12 }}>
-                  Payment already recorded. Add sessions in Matches tab, then close again when done for the day.
-                </p>
-              )}
-              {isPending && hasPayment && (
-                <button type="button" className="btn primary" disabled={saving} onClick={handleCloseAgain} style={{ marginTop: 12 }}>
-                  {saving ? 'Closing...' : 'Close Again (keep payment)'}
-                </button>
-              )}
               {isClosed && (
                 <button type="button" className="btn primary" disabled={saving} onClick={handleReopen} style={{ marginTop: 12 }}>
                   {saving ? 'Reopening...' : 'Reopen for More Sessions'}
@@ -302,7 +325,7 @@ export default function BulkDetail() {
           </button>
         )}
         {isPending && hasPayment && (
-          <button type="button" className="btn small" disabled={saving} onClick={handleCloseAgain}>
+          <button type="button" className="btn small primary" disabled={saving} onClick={handleCloseAgain}>
             Close Again
           </button>
         )}

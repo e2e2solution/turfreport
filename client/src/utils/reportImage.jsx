@@ -8,9 +8,9 @@ import {
 function sectionsForParams(params) {
   const sec = params.section || 'turf_online';
   if (sec === 'gym') return ['gym'];
-  if (sec === 'football_coaching') return ['football_coaching'];
   if (sec === 'turf') return ['turf'];
   if (sec === 'online') return ['online'];
+  if (sec === 'football_coaching') return ['football_coaching'];
   if (sec === 'all') return ['turf', 'online', 'gym', 'football_coaching'];
   return ['turf', 'online'];
 }
@@ -19,12 +19,32 @@ export function buildTitle(params) {
   const payment = params.filter_type === 'payment';
   const sec = params.section || 'turf_online';
   const range = params.match_date || (params.from && params.to ? `${params.from} to ${params.to}` : '');
+  const sameMonth = params.from && params.to && params.from.slice(0, 7) === params.to.slice(0, 7);
 
   if (sec === 'gym') {
     return payment ? `Gym — Payments Received (${range})` : `Gym Report (${range})`;
   }
+  if (sec === 'turf') {
+    if (payment) {
+      return sameMonth ? `Turf — Paid in ${params.from.slice(0, 7)}` : `Turf — Payments Received (${range})`;
+    }
+    return sameMonth ? `Turf Matches — ${params.from.slice(0, 7)}` : `Turf Report (${range})`;
+  }
+  if (sec === 'online') {
+    if (payment) {
+      return sameMonth ? `Online — Paid in ${params.from.slice(0, 7)}` : `Online — Payments Received (${range})`;
+    }
+    return sameMonth ? `Online Matches — ${params.from.slice(0, 7)}` : `Online Report (${range})`;
+  }
   if (sec === 'football_coaching') {
-    return payment ? `Football Coaching — Payments Received (${range})` : `Football Coaching Report (${range})`;
+    if (payment) {
+      if (sameMonth) {
+        return `Football Coaching — Paid in ${params.from.slice(0, 7)}`;
+      }
+      return `Football Coaching — Payments Received (${range})`;
+    }
+    if (params.match_date) return `Football Coaching — ${params.match_date.slice(0, 7)}`;
+    return `Football Coaching Report (${range})`;
   }
   if (payment) return `Turf + Online — Payments Received (${range})`;
   if (sec === 'all') return `All Bookings (${range})`;
@@ -39,6 +59,14 @@ export function reportImageFilename(params) {
   if (sec === 'gym') {
     if (paymentFilter) return `gym-payment-${match_date || `${from}-${to}`}.png`;
     return match_date ? `gym-report-${match_date}.png` : `gym-report-${from}-${to}.png`;
+  }
+  if (sec === 'turf') {
+    if (paymentFilter) return `turf-payment-${match_date || `${from}-${to}`}.png`;
+    return match_date ? `turf-${match_date}.png` : `turf-${from}-${to}.png`;
+  }
+  if (sec === 'online') {
+    if (paymentFilter) return `online-payment-${match_date || `${from}-${to}`}.png`;
+    return match_date ? `online-${match_date}.png` : `online-${from}-${to}.png`;
   }
   if (sec === 'football_coaching') {
     if (paymentFilter) return `football-coaching-payment-${match_date || `${from}-${to}`}.png`;

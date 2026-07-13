@@ -2367,6 +2367,77 @@ textarea:focus {
   flex-wrap: wrap;
 }
 
+.pt-draft-section {
+  margin-top: 1rem;
+}
+
+.pt-draft-section h4 {
+  margin: 0 0 0.5rem;
+  font-size: 0.95rem;
+  color: #334155;
+}
+
+.pt-ready-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 0.75rem;
+}
+
+.pt-ready-image-wrap {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 1rem;
+}
+
+.pt-ready-image-header {
+  text-align: center;
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.pt-ready-image-header h4 {
+  margin: 0 0 0.25rem;
+  font-size: 1.1rem;
+}
+
+.pt-ready-image-header p {
+  margin: 0;
+  color: #64748b;
+  font-size: 0.9rem;
+}
+
+.pt-ready-trainer-group {
+  margin-bottom: 1rem;
+}
+
+.pt-ready-trainer-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: #f8fafc;
+  border-radius: 8px;
+}
+
+.pt-ready-table {
+  margin-bottom: 0;
+}
+
+.pt-ready-grand-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 2px solid #0f172a;
+  font-size: 1.05rem;
+}
+
 .pt-session-calendar {
   margin-top: 0.5rem;
 }

@@ -1,4 +1,4 @@
-const PT_PLAN_TYPES = ['22_sessions', '1_month', '3_month'];
+const PT_PLAN_TYPES = ['11_sessions', '22_sessions', '1_month', '3_month'];
 const PT_GOALS = [
   'strength_and_conditioning',
   'calisthenics',
@@ -44,6 +44,7 @@ export function freezeDaysBetween(fromISO, toISO) {
 
 export function targetSessionsForPlan(planType) {
   switch (planType) {
+    case '11_sessions': return 11;
     case '22_sessions': return 22;
     case '1_month': return 26;
     case '3_month': return 78;
@@ -71,6 +72,7 @@ export function goalLabel(goal) {
 
 export function planLabel(planType) {
   switch (planType) {
+    case '11_sessions': return '11 Sessions PT';
     case '22_sessions': return '22 Sessions PT';
     case '1_month': return '1 Month PT (26 sessions)';
     case '3_month': return '3 Months PT (78 sessions)';

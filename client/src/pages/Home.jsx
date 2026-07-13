@@ -214,6 +214,18 @@ export default function Home() {
           <span className="action-icon">🏋️</span>
           <span>Personal Training</span>
         </Link>
+        <Link to="/football-coaching" className="action-card">
+          <span className="action-icon">⚽</span>
+          <span>Football Coaching — Month Report</span>
+        </Link>
+        <Link to="/online-report" className="action-card">
+          <span className="action-icon">🖥️</span>
+          <span>Online Match — Month Report</span>
+        </Link>
+        <Link to="/turf-report" className="action-card">
+          <span className="action-icon">🏟️</span>
+          <span>Turf Match — Month Report</span>
+        </Link>
         <Link to="/bookings" className="action-card">
           <span className="action-icon">📋</span>
           <span>View & Update Records</span>

@@ -3,6 +3,7 @@ import db from '../db.js';
 import { parseNum } from '../utils/excel.js';
 import { syncTrainerToMongo } from '../db/mongo.js';
 import ptDraftsRouter from './ptDrafts.js';
+import { archivePtCycle } from '../utils/ptCycleArchive.js';
 import {
   addDaysISO,
   calcPtBaseEndDate,
@@ -135,6 +136,47 @@ function getClientWithDetails(clientId) {
   };
 }
 
+function applyCycleDerived(cycle) {
+  const amountPaid = (cycle.advance_gpay || 0) + (cycle.advance_cash || 0)
+    + (cycle.balance_gpay || 0) + (cycle.balance_cash || 0);
+  const sessionTarget = targetSessionsForPlan(cycle.plan_type);
+  return {
+    ...cycle,
+    id: `cycle-${cycle.id}`,
+    cycle_id: cycle.id,
+    client_id: cycle.client_id,
+    record_type: 'cycle',
+    pt_goal_label: goalLabel(cycle.pt_goal),
+    plan_label: planLabel(cycle.plan_type),
+    status_label: 'Ready for Payment',
+    status: 'READY_FOR_PAYMENT',
+    completed_sessions: cycle.session_count || 0,
+    session_target: sessionTarget,
+    sessions_remaining: sessionTarget != null
+      ? Math.max(0, sessionTarget - (cycle.session_count || 0))
+      : null,
+    amount_paid: amountPaid,
+    amount_due: Math.max(0, (cycle.total_amount || 0) - amountPaid),
+    cycle_period: `${cycle.start_date} → ${cycle.base_end_date}`,
+  };
+}
+
+function listArchivedCycles({ trainerId } = {}) {
+  let sql = `
+    SELECT c.*, t.name AS trainer_name
+    FROM pt_cycles c
+    JOIN pt_trainers t ON t.id = c.trainer_id
+    WHERE c.status = 'READY_FOR_PAYMENT'
+  `;
+  const params = [];
+  if (trainerId) {
+    sql += ' AND c.trainer_id = ?';
+    params.push(trainerId);
+  }
+  sql += ' ORDER BY c.completed_at DESC, c.id DESC';
+  return db.prepare(sql).all(...params).map(applyCycleDerived);
+}
+
 function listClients({ trainerId, status } = {}) {
   let sql = `
     SELECT c.*, t.name AS trainer_name
@@ -155,7 +197,17 @@ function listClients({ trainerId, status } = {}) {
 
   sql += ' ORDER BY c.status ASC, c.start_date DESC, c.id DESC';
   const rows = db.prepare(sql).all(...params);
-  return rows.map((row) => applyClientDerived(row));
+  const clients = rows.map((row) => ({
+    ...applyClientDerived(row),
+    record_type: 'client',
+  }));
+
+  if (status === 'READY_FOR_PAYMENT') {
+    const cycles = listArchivedCycles({ trainerId });
+    return [...cycles, ...clients];
+  }
+
+  return clients;
 }
 
 router.get('/trainers', (_req, res) => {
@@ -323,6 +375,8 @@ router.post('/clients/:id/restart', (req, res) => {
 
   const startDate = req.body?.start_date;
   if (!startDate) return res.status(400).json({ error: 'start_date is required' });
+
+  archivePtCycle(req.params.id);
 
   const baseEndDate = calcPtBaseEndDate(startDate, existing.plan_type);
 

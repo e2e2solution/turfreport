@@ -121,8 +121,7 @@ export default function PTSessionCalendar({
                 const session = sessionByDate.get(cell.iso);
                 const checked = Boolean(session);
                 const frozen = isFrozenOn(cell.iso, freezes);
-                const atMax = planType === '22_sessions'
-                  && sessionTarget
+                const atMax = Boolean(sessionTarget)
                   && completedCount >= sessionTarget
                   && !checked;
 

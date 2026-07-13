@@ -5,6 +5,7 @@ import {
   isValidPtGoal,
   isValidPtPlanType,
 } from './pt.js';
+import { archivePtCycle, isRestartDraft } from './ptCycleArchive.js';
 
 export function applyPtDraftToSqlite(draft) {
   if (!draft?.trainer_id) throw new Error('Draft missing trainer_id');
@@ -26,6 +27,10 @@ export function applyPtDraftToSqlite(draft) {
   const existing = clientId
     ? db.prepare('SELECT * FROM pt_clients WHERE id = ?').get(clientId)
     : null;
+
+  if (existing && isRestartDraft(draft, existing)) {
+    archivePtCycle(clientId, draft.previous_cycle || null);
+  }
 
   if (existing) {
     db.prepare(`

@@ -7,15 +7,28 @@ const router = Router();
 const PERIODS = ['full', 'first_half', 'second_half'];
 
 router.get('/', (req, res) => {
-  const { date, coaching_month, status, filter_type } = req.query;
+  const { date, coaching_month, status, filter_type, from, to } = req.query;
   let sql = 'SELECT * FROM football_coaching WHERE 1=1';
   const params = [];
 
-  if (filter_type === 'payment' && date) {
-    sql = appendAnyPayment(sql, params, null, null, date);
+  if (filter_type === 'payment') {
+    if (from && to) {
+      sql = appendAnyPayment(sql, params, from, to, null);
+    } else if (date) {
+      // Allow YYYY-MM (month) or full date
+      if (/^\d{4}-\d{2}$/.test(date)) {
+        const [y, m] = date.split('-').map(Number);
+        const last = new Date(y, m, 0).getDate();
+        const monthFrom = `${date}-01`;
+        const monthTo = `${date}-${String(last).padStart(2, '0')}`;
+        sql = appendAnyPayment(sql, params, monthFrom, monthTo, null);
+      } else {
+        sql = appendAnyPayment(sql, params, null, null, date);
+      }
+    }
   } else if (coaching_month) {
     sql += ' AND coaching_month = ?';
-    params.push(coaching_month);
+    params.push(coaching_month.slice(0, 7));
   } else if (date) {
     sql += ` AND (
       advance_date = ? OR balance_date = ? OR coaching_month = ?

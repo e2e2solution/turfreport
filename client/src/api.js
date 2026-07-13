@@ -773,6 +773,10 @@ export async function collectPtDrafts() {
   return request(`${API_PT}/drafts/collect`, { method: 'POST' });
 }
 
+export async function syncReadyPtDrafts() {
+  return request(`${API_PT}/drafts/sync-ready`, { method: 'POST' });
+}
+
 export async function confirmPtDraft(draftId) {
   return request(`${API_PT}/drafts/${draftId}/confirm`, { method: 'POST' });
 }

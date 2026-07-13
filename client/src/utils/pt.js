@@ -7,12 +7,14 @@ export const PT_GOAL_OPTIONS = [
 
 export const PT_PLAN_OPTIONS = [
   { value: '22_sessions', label: '22 Sessions PT' },
+  { value: '11_sessions', label: '11 Sessions PT' },
   { value: '1_month', label: '1 Month PT (26 sessions)' },
   { value: '3_month', label: '3 Months PT (78 sessions)' },
 ];
 
 export function targetSessionsForPlan(planType) {
   switch (planType) {
+    case '11_sessions': return 11;
     case '22_sessions': return 22;
     case '1_month': return 26;
     case '3_month': return 78;

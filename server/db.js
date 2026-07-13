@@ -255,7 +255,7 @@ db.exec(`
     trainer_id INTEGER NOT NULL REFERENCES pt_trainers(id),
     client_name TEXT NOT NULL,
     pt_goal TEXT NOT NULL,
-    plan_type TEXT NOT NULL CHECK(plan_type IN ('22_sessions', '1_month', '3_month')),
+    plan_type TEXT NOT NULL CHECK(plan_type IN ('11_sessions', '22_sessions', '1_month', '3_month')),
     start_date TEXT NOT NULL,
     base_end_date TEXT NOT NULL,
     total_amount REAL DEFAULT 0,
@@ -349,7 +349,7 @@ if (!ptReadyPayment) {
       trainer_id INTEGER NOT NULL REFERENCES pt_trainers(id),
       client_name TEXT NOT NULL,
       pt_goal TEXT NOT NULL,
-      plan_type TEXT NOT NULL CHECK(plan_type IN ('22_sessions', '1_month', '3_month')),
+      plan_type TEXT NOT NULL CHECK(plan_type IN ('11_sessions', '22_sessions', '1_month', '3_month')),
       start_date TEXT NOT NULL,
       base_end_date TEXT NOT NULL,
       total_amount REAL DEFAULT 0,
@@ -383,6 +383,135 @@ if (!ptReadyPayment) {
   db.exec('PRAGMA foreign_keys = ON');
   db.prepare("INSERT INTO _app_migrations (key) VALUES ('pt_ready_for_payment')").run();
   console.log('PT clients: migrated to READY_FOR_PAYMENT status');
+}
+
+const ptCyclesTable = db.prepare("SELECT key FROM _app_migrations WHERE key = 'pt_cycles'").get();
+if (!ptCyclesTable) {
+  db.exec(`
+    CREATE TABLE pt_cycles (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      client_id INTEGER NOT NULL REFERENCES pt_clients(id),
+      trainer_id INTEGER NOT NULL REFERENCES pt_trainers(id),
+      client_name TEXT NOT NULL,
+      plan_type TEXT NOT NULL CHECK(plan_type IN ('11_sessions', '22_sessions', '1_month', '3_month')),
+      pt_goal TEXT NOT NULL,
+      start_date TEXT NOT NULL,
+      base_end_date TEXT NOT NULL,
+      total_amount REAL DEFAULT 0,
+      advance_gpay REAL DEFAULT 0,
+      advance_cash REAL DEFAULT 0,
+      advance_date TEXT,
+      balance_gpay REAL DEFAULT 0,
+      balance_cash REAL DEFAULT 0,
+      balance_date TEXT,
+      completed_at TEXT,
+      notes TEXT DEFAULT '',
+      session_count INTEGER DEFAULT 0,
+      sessions_json TEXT NOT NULL DEFAULT '[]',
+      freezes_json TEXT NOT NULL DEFAULT '[]',
+      status TEXT DEFAULT 'READY_FOR_PAYMENT' CHECK(status IN ('READY_FOR_PAYMENT', 'PAID')),
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+    CREATE INDEX idx_pt_cycles_trainer ON pt_cycles(trainer_id, status);
+    CREATE INDEX idx_pt_cycles_client ON pt_cycles(client_id);
+  `);
+  db.prepare("INSERT INTO _app_migrations (key) VALUES ('pt_cycles')").run();
+  console.log('PT cycles: created archive table for completed/restarted PT');
+}
+
+const pt11Sessions = db.prepare("SELECT key FROM _app_migrations WHERE key = 'pt_11_sessions'").get();
+if (!pt11Sessions) {
+  db.exec('PRAGMA foreign_keys = OFF');
+  db.exec(`
+    CREATE TABLE pt_clients_11 (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      trainer_id INTEGER NOT NULL REFERENCES pt_trainers(id),
+      client_name TEXT NOT NULL,
+      pt_goal TEXT NOT NULL,
+      plan_type TEXT NOT NULL CHECK(plan_type IN ('11_sessions', '22_sessions', '1_month', '3_month')),
+      start_date TEXT NOT NULL,
+      base_end_date TEXT NOT NULL,
+      total_amount REAL DEFAULT 0,
+      advance_gpay REAL DEFAULT 0,
+      advance_cash REAL DEFAULT 0,
+      advance_date TEXT,
+      balance_gpay REAL DEFAULT 0,
+      balance_cash REAL DEFAULT 0,
+      balance_date TEXT,
+      status TEXT DEFAULT 'ACTIVE' CHECK(status IN ('ACTIVE', 'READY_FOR_PAYMENT')),
+      notes TEXT DEFAULT '',
+      completed_at TEXT,
+      manual_reopen INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+    INSERT INTO pt_clients_11 (
+      id, trainer_id, client_name, pt_goal, plan_type, start_date, base_end_date,
+      total_amount, advance_gpay, advance_cash, advance_date,
+      balance_gpay, balance_cash, balance_date, status, notes, completed_at, manual_reopen, created_at
+    )
+    SELECT
+      id, trainer_id, client_name, pt_goal, plan_type, start_date, base_end_date,
+      total_amount, advance_gpay, advance_cash, advance_date,
+      balance_gpay, balance_cash, balance_date, status, notes, completed_at,
+      COALESCE(manual_reopen, 0), created_at
+    FROM pt_clients;
+    DROP TABLE pt_clients;
+    ALTER TABLE pt_clients_11 RENAME TO pt_clients;
+  `);
+
+  const hasCycles = db.prepare(`
+    SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'pt_cycles'
+  `).get();
+  if (hasCycles) {
+    db.exec(`
+      CREATE TABLE pt_cycles_11 (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id INTEGER NOT NULL REFERENCES pt_clients(id),
+        trainer_id INTEGER NOT NULL REFERENCES pt_trainers(id),
+        client_name TEXT NOT NULL,
+        plan_type TEXT NOT NULL CHECK(plan_type IN ('11_sessions', '22_sessions', '1_month', '3_month')),
+        pt_goal TEXT NOT NULL,
+        start_date TEXT NOT NULL,
+        base_end_date TEXT NOT NULL,
+        total_amount REAL DEFAULT 0,
+        advance_gpay REAL DEFAULT 0,
+        advance_cash REAL DEFAULT 0,
+        advance_date TEXT,
+        balance_gpay REAL DEFAULT 0,
+        balance_cash REAL DEFAULT 0,
+        balance_date TEXT,
+        completed_at TEXT,
+        notes TEXT DEFAULT '',
+        session_count INTEGER DEFAULT 0,
+        sessions_json TEXT NOT NULL DEFAULT '[]',
+        freezes_json TEXT NOT NULL DEFAULT '[]',
+        status TEXT DEFAULT 'READY_FOR_PAYMENT' CHECK(status IN ('READY_FOR_PAYMENT', 'PAID')),
+        created_at TEXT DEFAULT (datetime('now'))
+      );
+      INSERT INTO pt_cycles_11 (
+        id, client_id, trainer_id, client_name, plan_type, pt_goal,
+        start_date, base_end_date, total_amount,
+        advance_gpay, advance_cash, advance_date,
+        balance_gpay, balance_cash, balance_date,
+        completed_at, notes, session_count, sessions_json, freezes_json, status, created_at
+      )
+      SELECT
+        id, client_id, trainer_id, client_name, plan_type, pt_goal,
+        start_date, base_end_date, total_amount,
+        advance_gpay, advance_cash, advance_date,
+        balance_gpay, balance_cash, balance_date,
+        completed_at, notes, session_count, sessions_json, freezes_json, status, created_at
+      FROM pt_cycles;
+      DROP TABLE pt_cycles;
+      ALTER TABLE pt_cycles_11 RENAME TO pt_cycles;
+      CREATE INDEX IF NOT EXISTS idx_pt_cycles_trainer ON pt_cycles(trainer_id, status);
+      CREATE INDEX IF NOT EXISTS idx_pt_cycles_client ON pt_cycles(client_id);
+    `);
+  }
+
+  db.exec('PRAGMA foreign_keys = ON');
+  db.prepare("INSERT INTO _app_migrations (key) VALUES ('pt_11_sessions')").run();
+  console.log('PT plans: added 11_sessions plan type');
 }
 
 export default db;
