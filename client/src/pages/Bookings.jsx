@@ -25,6 +25,12 @@ const FILTER_TYPES = [
 function RecordCard({ item, type, onDelete }) {
   const isGym = type === 'gym';
   const isCoaching = type === 'football_coaching';
+  const isOnline = type === 'online';
+  const methodLabel = (value) => ({
+    DIRECT_GPAY: 'Direct GPay',
+    MPAY: 'mPay',
+    ONLINE_PAY: 'Online Pay',
+  }[value] || value || 'Direct GPay');
 
   return (
     <div className={`booking-card status-${item.status.toLowerCase()}`}>
@@ -59,6 +65,22 @@ function RecordCard({ item, type, onDelete }) {
         <span>Adv: {formatCurrency((item.advance_gpay || 0) + (item.advance_cash || 0))}</span>
         <span>Bal: {formatCurrency((item.balance_gpay || 0) + (item.balance_cash || 0))}</span>
       </div>
+      {isOnline && (
+        <div className="card-meta">
+          {(item.advance_gpay || 0) > 0 && (
+            <span>
+              Advance: {methodLabel(item.advance_method)}
+              {item.advance_expected_credit_date && ` · expected ${formatDateDMY(item.advance_expected_credit_date)}`}
+            </span>
+          )}
+          {(item.balance_gpay || 0) > 0 && (
+            <span>
+              Balance: {methodLabel(item.balance_method)}
+              {item.balance_expected_credit_date && ` · expected ${formatDateDMY(item.balance_expected_credit_date)}`}
+            </span>
+          )}
+        </div>
+      )}
       {item.remarks && <p className="remarks">{item.remarks}</p>}
       <div className="card-actions">
         <Link to={`/edit/${type}/${item.id}`} className="btn small">Edit</Link>

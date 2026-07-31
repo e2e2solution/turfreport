@@ -1,4 +1,5 @@
 import { formatCurrency } from '../api';
+import { SPORTS, sportLabel } from '../utils/sports';
 
 function StatCard({ label, value, sub }) {
   return (
@@ -19,10 +20,10 @@ export function TurfSummaryCapture({ data, rangeLabel, period }) {
         <p>{rangeLabel} · {period}</p>
       </div>
       <div className="stat-grid summary-stat-grid">
-        {['cricket', 'football', 'badminton'].map((s) => (
+        {SPORTS.map((s) => (
           <StatCard
             key={s}
-            label={s.charAt(0).toUpperCase() + s.slice(1)}
+            label={sportLabel(s)}
             value={`${data.turf[s].hours} hrs`}
             sub={formatCurrency(data.turf[s].payment)}
           />

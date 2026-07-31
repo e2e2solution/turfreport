@@ -3,6 +3,7 @@ import db from '../db.js';
 import { parseNum } from '../utils/excel.js';
 import { calcGymEndDate } from '../utils/dates.js';
 import { appendAnyPayment } from '../utils/reportQuery.js';
+import { searchGymNameHistory } from '../utils/nameHistory.js';
 
 const router = Router();
 
@@ -27,6 +28,10 @@ router.get('/', (req, res) => {
 
   sql += ' ORDER BY start_date DESC, id DESC';
   res.json(db.prepare(sql).all(...params));
+});
+
+router.get('/name-search', (req, res) => {
+  res.json(searchGymNameHistory(req.query.q));
 });
 
 router.get('/:id', (req, res) => {

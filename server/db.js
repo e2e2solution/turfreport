@@ -9,7 +9,7 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS bookings (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
-    sport TEXT NOT NULL CHECK(sport IN ('cricket', 'football', 'badminton')),
+    sport TEXT NOT NULL CHECK(sport IN ('cricket', 'football', 'badminton', 'cricket_ball')),
     match_date TEXT NOT NULL,
     total REAL NOT NULL,
     time_slot TEXT NOT NULL,
@@ -27,7 +27,7 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS online_bookings (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
-    sport TEXT NOT NULL CHECK(sport IN ('cricket', 'football', 'badminton')),
+    sport TEXT NOT NULL CHECK(sport IN ('cricket', 'football', 'badminton', 'cricket_ball')),
     match_date TEXT NOT NULL,
     total REAL NOT NULL,
     time_slot TEXT NOT NULL,
@@ -69,7 +69,7 @@ if (!bulkTables) {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       category TEXT NOT NULL CHECK(category IN ('turf', 'online', 'gym')),
       name TEXT NOT NULL,
-      sport TEXT CHECK(sport IS NULL OR sport IN ('cricket', 'football', 'badminton')),
+      sport TEXT CHECK(sport IS NULL OR sport IN ('cricket', 'football', 'badminton', 'cricket_ball')),
       total_hours REAL NOT NULL DEFAULT 0,
       total_amount REAL DEFAULT 0,
       plan_months INTEGER,
@@ -193,7 +193,7 @@ if (onlineTables.includes('online_bookings_migrated') && onlineTables.includes('
     CREATE TABLE online_bookings_migrated (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
-      sport TEXT NOT NULL CHECK(sport IN ('cricket', 'football', 'badminton')),
+      sport TEXT NOT NULL CHECK(sport IN ('cricket', 'football', 'badminton', 'cricket_ball')),
       match_date TEXT NOT NULL,
       total REAL NOT NULL,
       time_slot TEXT NOT NULL,
@@ -512,6 +512,242 @@ if (!pt11Sessions) {
   db.exec('PRAGMA foreign_keys = ON');
   db.prepare("INSERT INTO _app_migrations (key) VALUES ('pt_11_sessions')").run();
   console.log('PT plans: added 11_sessions plan type');
+}
+
+const onlinePaymentChannels = db.prepare(
+  "SELECT key FROM _app_migrations WHERE key = 'online_payment_channels_v1'",
+).get();
+if (!onlinePaymentChannels) {
+  const onlineCols = db.prepare('PRAGMA table_info(online_bookings)').all().map((col) => col.name);
+  if (!onlineCols.includes('advance_method')) {
+    db.exec("ALTER TABLE online_bookings ADD COLUMN advance_method TEXT DEFAULT 'DIRECT_GPAY'");
+  }
+  if (!onlineCols.includes('advance_expected_credit_date')) {
+    db.exec('ALTER TABLE online_bookings ADD COLUMN advance_expected_credit_date TEXT');
+  }
+  if (!onlineCols.includes('balance_method')) {
+    db.exec("ALTER TABLE online_bookings ADD COLUMN balance_method TEXT DEFAULT 'DIRECT_GPAY'");
+  }
+  if (!onlineCols.includes('balance_expected_credit_date')) {
+    db.exec('ALTER TABLE online_bookings ADD COLUMN balance_expected_credit_date TEXT');
+  }
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS online_settlements (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      credit_date TEXT NOT NULL,
+      source TEXT NOT NULL DEFAULT 'MIXED'
+        CHECK(source IN ('MPAY', 'ONLINE_PAY', 'MIXED')),
+      from_date TEXT NOT NULL,
+      to_date TEXT NOT NULL,
+      gross_amount REAL NOT NULL DEFAULT 0,
+      received_amount REAL NOT NULL DEFAULT 0,
+      commission_amount REAL NOT NULL DEFAULT 0,
+      reference TEXT DEFAULT '',
+      notes TEXT DEFAULT '',
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS online_settlement_allocations (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      settlement_id INTEGER NOT NULL
+        REFERENCES online_settlements(id) ON DELETE CASCADE,
+      online_booking_id INTEGER NOT NULL
+        REFERENCES online_bookings(id) ON DELETE RESTRICT,
+      payment_stage TEXT NOT NULL
+        CHECK(payment_stage IN ('advance', 'balance')),
+      expected_amount REAL NOT NULL DEFAULT 0,
+      received_amount REAL NOT NULL DEFAULT 0,
+      commission_amount REAL NOT NULL DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_online_settlements_credit_date
+      ON online_settlements(credit_date);
+    CREATE INDEX IF NOT EXISTS idx_online_allocations_booking
+      ON online_settlement_allocations(online_booking_id, payment_stage);
+  `);
+
+  db.prepare(`
+    UPDATE online_bookings
+    SET advance_method = 'DIRECT_GPAY'
+    WHERE advance_method IS NULL OR advance_method = ''
+  `).run();
+  db.prepare(`
+    UPDATE online_bookings
+    SET balance_method = 'DIRECT_GPAY'
+    WHERE balance_method IS NULL OR balance_method = ''
+  `).run();
+
+  db.prepare(
+    "INSERT INTO _app_migrations (key) VALUES ('online_payment_channels_v1')",
+  ).run();
+  console.log('Online payments: added channels, expected credit dates, and settlements');
+}
+
+const bookingLinkGroup = db.prepare(
+  "SELECT key FROM _app_migrations WHERE key = 'booking_link_group_v1'",
+).get();
+if (!bookingLinkGroup) {
+  const bookingCols = db.prepare('PRAGMA table_info(bookings)').all().map((col) => col.name);
+  if (!bookingCols.includes('link_group_id')) {
+    db.exec('ALTER TABLE bookings ADD COLUMN link_group_id TEXT');
+  }
+  db.exec('CREATE INDEX IF NOT EXISTS idx_bookings_link_group ON bookings(link_group_id)');
+  db.prepare("INSERT INTO _app_migrations (key) VALUES ('booking_link_group_v1')").run();
+  console.log('Bookings: added link_group_id for same-day linked sports');
+}
+
+const sportCricketBall = db.prepare(
+  "SELECT key FROM _app_migrations WHERE key = 'sport_cricket_ball_v1'",
+).get();
+if (!sportCricketBall) {
+  db.exec('PRAGMA foreign_keys = OFF');
+  db.exec(`
+    CREATE TABLE bookings_sport_v1 (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      sport TEXT NOT NULL CHECK(sport IN ('cricket', 'football', 'badminton', 'cricket_ball')),
+      match_date TEXT NOT NULL,
+      total REAL NOT NULL,
+      time_slot TEXT NOT NULL,
+      advance_gpay REAL DEFAULT 0,
+      advance_cash REAL DEFAULT 0,
+      advance_date TEXT,
+      balance_gpay REAL DEFAULT 0,
+      balance_cash REAL DEFAULT 0,
+      balance_date TEXT,
+      status TEXT DEFAULT 'PENDING' CHECK(status IN ('CLOSED', 'PENDING')),
+      remarks TEXT DEFAULT '',
+      created_at TEXT DEFAULT (datetime('now')),
+      link_group_id TEXT
+    );
+    INSERT INTO bookings_sport_v1 (
+      id, name, sport, match_date, total, time_slot,
+      advance_gpay, advance_cash, advance_date,
+      balance_gpay, balance_cash, balance_date,
+      status, remarks, created_at, link_group_id
+    )
+    SELECT
+      id, name, sport, match_date, total, time_slot,
+      advance_gpay, advance_cash, advance_date,
+      balance_gpay, balance_cash, balance_date,
+      status, remarks, created_at, link_group_id
+    FROM bookings;
+    DROP TABLE bookings;
+    ALTER TABLE bookings_sport_v1 RENAME TO bookings;
+    CREATE INDEX IF NOT EXISTS idx_bookings_link_group ON bookings(link_group_id);
+  `);
+
+  const onlineCols = db.prepare('PRAGMA table_info(online_bookings)').all().map((c) => c.name);
+  const hasAdvanceMethod = onlineCols.includes('advance_method');
+  db.exec(`
+    CREATE TABLE online_bookings_sport_v1 (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      sport TEXT NOT NULL CHECK(sport IN ('cricket', 'football', 'badminton', 'cricket_ball')),
+      match_date TEXT NOT NULL,
+      total REAL NOT NULL,
+      time_slot TEXT NOT NULL,
+      advance_gpay REAL DEFAULT 0,
+      advance_cash REAL DEFAULT 0,
+      advance_date TEXT,
+      balance_gpay REAL DEFAULT 0,
+      balance_cash REAL DEFAULT 0,
+      balance_date TEXT,
+      status TEXT DEFAULT 'PENDING' CHECK(status IN ('CLOSED', 'PENDING')),
+      remarks TEXT DEFAULT '',
+      created_at TEXT DEFAULT (datetime('now')),
+      advance_method TEXT DEFAULT 'DIRECT_GPAY',
+      advance_expected_credit_date TEXT,
+      balance_method TEXT DEFAULT 'DIRECT_GPAY',
+      balance_expected_credit_date TEXT
+    );
+  `);
+  if (hasAdvanceMethod) {
+    db.exec(`
+      INSERT INTO online_bookings_sport_v1 (
+        id, name, sport, match_date, total, time_slot,
+        advance_gpay, advance_cash, advance_date,
+        balance_gpay, balance_cash, balance_date,
+        status, remarks, created_at,
+        advance_method, advance_expected_credit_date,
+        balance_method, balance_expected_credit_date
+      )
+      SELECT
+        id, name, sport, match_date, total, time_slot,
+        advance_gpay, advance_cash, advance_date,
+        balance_gpay, balance_cash, balance_date,
+        status, remarks, created_at,
+        COALESCE(advance_method, 'DIRECT_GPAY'), advance_expected_credit_date,
+        COALESCE(balance_method, 'DIRECT_GPAY'), balance_expected_credit_date
+      FROM online_bookings;
+    `);
+  } else {
+    db.exec(`
+      INSERT INTO online_bookings_sport_v1 (
+        id, name, sport, match_date, total, time_slot,
+        advance_gpay, advance_cash, advance_date,
+        balance_gpay, balance_cash, balance_date,
+        status, remarks, created_at
+      )
+      SELECT
+        id, name, sport, match_date, total, time_slot,
+        advance_gpay, advance_cash, advance_date,
+        balance_gpay, balance_cash, balance_date,
+        status, remarks, created_at
+      FROM online_bookings;
+    `);
+  }
+  db.exec(`
+    DROP TABLE online_bookings;
+    ALTER TABLE online_bookings_sport_v1 RENAME TO online_bookings;
+  `);
+
+  const bulkExists = db.prepare(
+    "SELECT name FROM sqlite_master WHERE type='table' AND name='bulk_packages'",
+  ).get();
+  if (bulkExists) {
+    db.exec(`
+      CREATE TABLE bulk_packages_sport_v1 (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        category TEXT NOT NULL CHECK(category IN ('turf', 'online', 'gym')),
+        name TEXT NOT NULL,
+        sport TEXT CHECK(sport IS NULL OR sport IN ('cricket', 'football', 'badminton', 'cricket_ball')),
+        total_hours REAL NOT NULL DEFAULT 0,
+        total_amount REAL DEFAULT 0,
+        plan_months INTEGER,
+        advance_gpay REAL DEFAULT 0,
+        advance_cash REAL DEFAULT 0,
+        advance_date TEXT,
+        balance_gpay REAL DEFAULT 0,
+        balance_cash REAL DEFAULT 0,
+        balance_date TEXT,
+        status TEXT DEFAULT 'PENDING' CHECK(status IN ('CLOSED', 'PENDING')),
+        remarks TEXT DEFAULT 'bulk',
+        created_at TEXT DEFAULT (datetime('now'))
+      );
+      INSERT INTO bulk_packages_sport_v1 (
+        id, category, name, sport, total_hours, total_amount, plan_months,
+        advance_gpay, advance_cash, advance_date,
+        balance_gpay, balance_cash, balance_date,
+        status, remarks, created_at
+      )
+      SELECT
+        id, category, name, sport, total_hours, total_amount, plan_months,
+        advance_gpay, advance_cash, advance_date,
+        balance_gpay, balance_cash, balance_date,
+        status, remarks, created_at
+      FROM bulk_packages;
+      DROP TABLE bulk_packages;
+      ALTER TABLE bulk_packages_sport_v1 RENAME TO bulk_packages;
+    `);
+  }
+
+  db.exec('PRAGMA foreign_keys = ON');
+  db.prepare("INSERT INTO _app_migrations (key) VALUES ('sport_cricket_ball_v1')").run();
+  console.log('Sports: added cricket_ball');
 }
 
 export default db;

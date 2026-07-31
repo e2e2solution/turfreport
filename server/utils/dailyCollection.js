@@ -1,7 +1,11 @@
 import db from '../db.js';
+import {
+  queryOnlineDirectReceivedRows,
+  queryOnlineSettlementRows,
+} from './onlinePayments.js';
 
 function emptyBucket() {
-  return { gpay: 0, cash: 0, total: 0 };
+  return { gpay: 0, cash: 0, bank: 0, total: 0 };
 }
 
 function addPaymentForDate(row, date, bucket) {
@@ -13,31 +17,42 @@ function addPaymentForDate(row, date, bucket) {
     bucket.gpay += row.balance_gpay || 0;
     bucket.cash += row.balance_cash || 0;
   }
-  bucket.total = bucket.gpay + bucket.cash;
+  bucket.total = bucket.gpay + bucket.cash + bucket.bank;
 }
 
 function addBuckets(...buckets) {
   return buckets.reduce((acc, b) => ({
     gpay: acc.gpay + b.gpay,
     cash: acc.cash + b.cash,
+    bank: acc.bank + (b.bank || 0),
     total: acc.total + b.total,
   }), emptyBucket());
 }
 
 export function calcDailyCollection(date) {
   const turfRows = db.prepare('SELECT * FROM bookings').all();
-  const onlineRows = db.prepare('SELECT * FROM online_bookings').all();
   const gymRows = db.prepare('SELECT * FROM gym_entries').all();
 
   const turf = emptyBucket();
+  const online = emptyBucket();
   const badminton = emptyBucket();
   const gym = emptyBucket();
   const football_coaching = emptyBucket();
 
-  for (const row of [...turfRows, ...onlineRows]) {
+  for (const row of turfRows) {
     const bucket = row.sport === 'badminton' ? badminton : turf;
     addPaymentForDate(row, date, bucket);
   }
+
+  const onlineDirectRows = queryOnlineDirectReceivedRows({ date });
+  for (const row of onlineDirectRows) {
+    addPaymentForDate(row, date, online);
+  }
+  const onlineSettlementRows = queryOnlineSettlementRows({ date });
+  for (const row of onlineSettlementRows) {
+    online.bank += Number(row.received_amount) || 0;
+  }
+  online.total = online.gpay + online.cash + online.bank;
 
   for (const row of gymRows) {
     addPaymentForDate(row, date, gym);
@@ -49,6 +64,8 @@ export function calcDailyCollection(date) {
   for (const row of bulkRows) {
     if (row.category === 'gym') {
       addPaymentForDate(row, date, gym);
+    } else if (row.category === 'online') {
+      addPaymentForDate(row, date, online);
     } else {
       const bucket = row.sport === 'badminton' ? badminton : turf;
       addPaymentForDate(row, date, bucket);
@@ -60,16 +77,18 @@ export function calcDailyCollection(date) {
     addPaymentForDate(row, date, football_coaching);
   }
 
-  const overall = addBuckets(turf, badminton, gym, football_coaching);
+  const overall = addBuckets(turf, online, badminton, gym, football_coaching);
 
   return {
     date,
     turf,
+    online,
     badminton,
     gym,
     football_coaching,
     gpay: overall.gpay,
     cash: overall.cash,
+    bank: overall.bank,
     total: overall.total,
   };
 }

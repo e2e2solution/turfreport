@@ -1,10 +1,25 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import TimeSlotPicker from './TimeSlotPicker';
+import NameHistoryInput from './NameHistoryInput';
 import { PLAN_OPTIONS, calcGymEndDate, planLabel, COACHING_PERIOD_OPTIONS } from '../utils/dates';
-import { todayISO } from '../api';
+import { SPORTS, sportLabel } from '../utils/sports';
+import {
+  todayISO,
+  searchBookingNames,
+  searchOnlineNames,
+  searchGymNames,
+  searchFootballCoachingNames,
+  fetchBookings,
+} from '../api';
 
-const SPORTS = ['cricket', 'football', 'badminton'];
 const STATUSES = ['PENDING', 'CLOSED'];
+
+function applyHistory(setForm, autofill = {}) {
+  setForm((current) => ({
+    ...current,
+    ...autofill,
+  }));
+}
 
 export function TabBar({ tabs, active, onChange }) {
   return (
@@ -45,25 +60,141 @@ export function PaymentSection({ title, className, gpayField, cashField, dateFie
   );
 }
 
-export function BookingForm({ initial, onSubmit, submitLabel = 'Save' }) {
+const ONLINE_PAYMENT_METHODS = [
+  { value: 'DIRECT_GPAY', label: 'Direct GPay' },
+  { value: 'MPAY', label: 'mPay' },
+  { value: 'ONLINE_PAY', label: 'Online Pay' },
+];
+
+function expectedOnlineCreditDate(paymentDate, method) {
+  if (!paymentDate) return '';
+  if (method === 'DIRECT_GPAY') return paymentDate;
+  const date = new Date(`${paymentDate}T00:00:00`);
+  if (method === 'MPAY') date.setDate(date.getDate() + 2);
+  if (method === 'ONLINE_PAY') date.setMonth(date.getMonth() + 1, 1);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function OnlinePaymentSection({
+  title,
+  className,
+  amountField,
+  dateField,
+  methodField,
+  expectedField,
+  form,
+  set,
+}) {
+  const method = form[methodField] || 'DIRECT_GPAY';
+  const updateDate = (value) => {
+    set(dateField, value);
+    set(expectedField, expectedOnlineCreditDate(value, method));
+  };
+  const updateMethod = (value) => {
+    set(methodField, value);
+    set(expectedField, expectedOnlineCreditDate(form[dateField], value));
+  };
+
+  return (
+    <div className={`form-section ${className}`}>
+      <h3>{title}</h3>
+      <label>
+        Payment Method
+        <select value={method} onChange={(e) => updateMethod(e.target.value)}>
+          {ONLINE_PAYMENT_METHODS.map((option) => (
+            <option key={option.value} value={option.value}>{option.label}</option>
+          ))}
+        </select>
+      </label>
+      <div className="row-2">
+        <label>
+          Amount
+          <input
+            type="number"
+            value={form[amountField]}
+            onChange={(e) => set(amountField, e.target.value)}
+            min="0"
+            placeholder="0"
+          />
+        </label>
+        <label>
+          Payment Date
+          <input type="date" value={form[dateField]} onChange={(e) => updateDate(e.target.value)} />
+        </label>
+      </div>
+      <label>
+        {method === 'DIRECT_GPAY' ? 'Bank Credit Date' : 'Expected Credit Date'}
+        <input
+          type="date"
+          value={form[expectedField] || ''}
+          onChange={(e) => set(expectedField, e.target.value)}
+        />
+      </label>
+      {method === 'MPAY' && <p className="hint">mPay normally credits after 2 days. You can adjust the expected date.</p>}
+      {method === 'ONLINE_PAY' && <p className="hint">Online Pay normally credits at the start of next month. You can adjust the expected date.</p>}
+      {method === 'DIRECT_GPAY' && <p className="hint">Direct GPay is counted in collection on the payment date.</p>}
+    </div>
+  );
+}
+
+export function BookingForm({ initial, onSubmit, submitLabel = 'Save', enableNameHistory = false }) {
   const empty = {
     name: '', sport: 'cricket', match_date: '', total: '', time_slot: '',
     advance_gpay: '', advance_cash: '', advance_date: '',
     balance_gpay: '', balance_cash: '', balance_date: '',
     status: 'PENDING', remarks: '',
+    link_booking_id: '',
   };
-  const [form, setForm] = useState({ ...empty, ...initial });
+  const [form, setForm] = useState({ ...empty, ...initial, link_booking_id: initial?.link_booking_id || '' });
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [linkOptions, setLinkOptions] = useState([]);
   const set = (field, value) => setForm((f) => ({ ...f, [field]: value }));
+  const searchNames = useCallback((q) => searchBookingNames(q), []);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadLinkOptions() {
+      if (!form.match_date) {
+        setLinkOptions([]);
+        return;
+      }
+      try {
+        const rows = await fetchBookings({
+          match_date: form.match_date,
+          ...(initial?.id ? { exclude_id: initial.id } : {}),
+        });
+        if (cancelled) return;
+        setLinkOptions(rows || []);
+        // Prefill linked partner when editing an already-linked booking
+        if (initial?.link_group_id && !form.link_booking_id) {
+          const partner = (rows || []).find((r) => r.link_group_id === initial.link_group_id);
+          if (partner) setForm((f) => ({ ...f, link_booking_id: String(partner.id) }));
+        }
+      } catch {
+        if (!cancelled) setLinkOptions([]);
+      }
+    }
+    loadLinkOptions();
+    return () => { cancelled = true; };
+  }, [form.match_date, initial?.id, initial?.link_group_id]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     if (!form.match_date) { setError('Match date is required'); return; }
     if (!form.time_slot) { setError('Please select both start and end time'); return; }
+    if (form.total === '' || form.total == null) { setError('Total amount is required (use 0 if amount is on the linked booking)'); return; }
     setSaving(true);
-    try { await onSubmit(form); } catch (err) { setError(err.message); }
+    try {
+      await onSubmit({
+        ...form,
+        link_booking_id: form.link_booking_id === '' ? '' : form.link_booking_id,
+      });
+    } catch (err) { setError(err.message); }
     finally { setSaving(false); }
   };
 
@@ -72,15 +203,47 @@ export function BookingForm({ initial, onSubmit, submitLabel = 'Save' }) {
       {error && <div className="alert error">{error}</div>}
       <div className="form-section">
         <h3>Match Details</h3>
-        <label>Name *<input value={form.name} onChange={(e) => set('name', e.target.value)} required placeholder="Customer name" /></label>
+        {enableNameHistory ? (
+          <NameHistoryInput
+            label="Name *"
+            value={form.name}
+            onChange={(v) => set('name', v)}
+            onPick={(hint) => applyHistory(setForm, hint.autofill)}
+            searchFn={searchNames}
+            required
+            placeholder="Customer name"
+          />
+        ) : (
+          <label>Name *<input value={form.name} onChange={(e) => set('name', e.target.value)} required placeholder="Customer name" /></label>
+        )}
         <label>Sport *
           <select value={form.sport} onChange={(e) => set('sport', e.target.value)}>
-            {SPORTS.map((s) => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
+            {SPORTS.map((s) => <option key={s} value={s}>{sportLabel(s)}</option>)}
           </select>
         </label>
         <label>Match Date *<input type="date" value={form.match_date} onChange={(e) => set('match_date', e.target.value)} required /></label>
         <label>Total Amount *<input type="number" value={form.total} onChange={(e) => set('total', e.target.value)} required min="0" /></label>
         <TimeSlotPicker value={form.time_slot} onChange={(v) => set('time_slot', v)} />
+        <label>
+          Link to booking (same day)
+          <select
+            value={form.link_booking_id || ''}
+            onChange={(e) => set('link_booking_id', e.target.value)}
+          >
+            <option value="">— None —</option>
+            {linkOptions.map((r) => (
+              <option key={r.id} value={r.id}>
+                #{r.id} · {r.name} · {r.sport} · {r.time_slot}
+                {(Number(r.total) || 0) > 0 ? ` · ₹${r.total}` : ' · no amount'}
+              </option>
+            ))}
+          </select>
+        </label>
+        <p className="hint">
+          For combined pay (e.g. football + badminton): enter the full amount on one booking,
+          leave total 0 on the other, and link them. Daily report highlights both in the same colour;
+          collection uses only the booking where amount/payment is entered.
+        </p>
       </div>
       <PaymentSection title="Advance Paid (optional)" className="advance" gpayField="advance_gpay" cashField="advance_cash" dateField="advance_date" form={form} set={set} />
       <PaymentSection title="Balance Paid" className="balance" gpayField="balance_gpay" cashField="balance_cash" dateField="balance_date" form={form} set={set} />
@@ -97,11 +260,13 @@ export function BookingForm({ initial, onSubmit, submitLabel = 'Save' }) {
   );
 }
 
-export function OnlineForm({ initial, onSubmit, submitLabel = 'Save' }) {
+export function OnlineForm({ initial, onSubmit, submitLabel = 'Save', enableNameHistory = false }) {
   const empty = {
     name: '', sport: 'cricket', match_date: '', total: '', time_slot: '',
     advance_gpay: '', advance_cash: '', advance_date: '',
+    advance_method: 'DIRECT_GPAY', advance_expected_credit_date: '',
     balance_gpay: '', balance_cash: '', balance_date: '',
+    balance_method: 'DIRECT_GPAY', balance_expected_credit_date: '',
     status: 'PENDING', remarks: '',
   };
   const merged = { ...empty, ...initial };
@@ -114,6 +279,7 @@ export function OnlineForm({ initial, onSubmit, submitLabel = 'Save' }) {
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const set = (field, value) => setForm((f) => ({ ...f, [field]: value }));
+  const searchNames = useCallback((q) => searchOnlineNames(q), []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -130,18 +296,47 @@ export function OnlineForm({ initial, onSubmit, submitLabel = 'Save' }) {
       {error && <div className="alert error">{error}</div>}
       <div className="form-section">
         <h3>Online Booking Details</h3>
-        <label>Name *<input value={form.name} onChange={(e) => set('name', e.target.value)} required /></label>
+        {enableNameHistory ? (
+          <NameHistoryInput
+            label="Name *"
+            value={form.name}
+            onChange={(v) => set('name', v)}
+            onPick={(hint) => applyHistory(setForm, hint.autofill)}
+            searchFn={searchNames}
+            required
+          />
+        ) : (
+          <label>Name *<input value={form.name} onChange={(e) => set('name', e.target.value)} required /></label>
+        )}
         <label>Sport *
           <select value={form.sport} onChange={(e) => set('sport', e.target.value)}>
-            {SPORTS.map((s) => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
+            {SPORTS.map((s) => <option key={s} value={s}>{sportLabel(s)}</option>)}
           </select>
         </label>
         <label>Match Date *<input type="date" value={form.match_date} onChange={(e) => set('match_date', e.target.value)} required /></label>
         <label>Total Amount *<input type="number" value={form.total} onChange={(e) => set('total', e.target.value)} required min="0" /></label>
         <TimeSlotPicker value={form.time_slot} onChange={(v) => set('time_slot', v)} />
       </div>
-      <PaymentSection title="Advance Paid (optional)" className="advance" gpayField="advance_gpay" cashField="advance_cash" dateField="advance_date" form={form} set={set} />
-      <PaymentSection title="Balance Paid" className="balance" gpayField="balance_gpay" cashField="balance_cash" dateField="balance_date" form={form} set={set} />
+      <OnlinePaymentSection
+        title="Advance Payment (optional)"
+        className="advance"
+        amountField="advance_gpay"
+        dateField="advance_date"
+        methodField="advance_method"
+        expectedField="advance_expected_credit_date"
+        form={form}
+        set={set}
+      />
+      <OnlinePaymentSection
+        title="Balance Payment"
+        className="balance"
+        amountField="balance_gpay"
+        dateField="balance_date"
+        methodField="balance_method"
+        expectedField="balance_expected_credit_date"
+        form={form}
+        set={set}
+      />
       <div className="form-section">
         <label>Status
           <select value={form.status} onChange={(e) => set('status', e.target.value)}>
@@ -155,7 +350,7 @@ export function OnlineForm({ initial, onSubmit, submitLabel = 'Save' }) {
   );
 }
 
-export function GymForm({ initial, onSubmit, submitLabel = 'Save' }) {
+export function GymForm({ initial, onSubmit, submitLabel = 'Save', enableNameHistory = false }) {
   const empty = {
     name: '', plan_months: 1, start_date: todayISO(), end_date: '',
     total: '', personal_training_amount: '',
@@ -173,6 +368,7 @@ export function GymForm({ initial, onSubmit, submitLabel = 'Save' }) {
   const [form, setForm] = useState(merged);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  const searchNames = useCallback((q) => searchGymNames(q), []);
 
   useEffect(() => {
     if (form.start_date && form.plan_months) {
@@ -197,7 +393,18 @@ export function GymForm({ initial, onSubmit, submitLabel = 'Save' }) {
       {error && <div className="alert error">{error}</div>}
       <div className="form-section">
         <h3>Gym Details</h3>
-        <label>Name *<input value={form.name} onChange={(e) => set('name', e.target.value)} required /></label>
+        {enableNameHistory ? (
+          <NameHistoryInput
+            label="Name *"
+            value={form.name}
+            onChange={(v) => set('name', v)}
+            onPick={(hint) => applyHistory(setForm, hint.autofill)}
+            searchFn={searchNames}
+            required
+          />
+        ) : (
+          <label>Name *<input value={form.name} onChange={(e) => set('name', e.target.value)} required /></label>
+        )}
         <label>Plan *
           <select value={form.plan_months} onChange={(e) => set('plan_months', Number(e.target.value))}>
             {PLAN_OPTIONS.map((p) => (
@@ -235,7 +442,7 @@ function currentMonthISO() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 
-export function FootballCoachingForm({ initial, onSubmit, submitLabel = 'Save' }) {
+export function FootballCoachingForm({ initial, onSubmit, submitLabel = 'Save', enableNameHistory = false }) {
   const empty = {
     name: '', parent_name: '', phone: '', coaching_month: currentMonthISO(), period: 'full', total: '',
     advance_gpay: '', advance_cash: '', advance_date: '',
@@ -246,6 +453,7 @@ export function FootballCoachingForm({ initial, onSubmit, submitLabel = 'Save' }
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const set = (field, value) => setForm((f) => ({ ...f, [field]: value }));
+  const searchNames = useCallback((q) => searchFootballCoachingNames(q), []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -261,7 +469,19 @@ export function FootballCoachingForm({ initial, onSubmit, submitLabel = 'Save' }
       {error && <div className="alert error">{error}</div>}
       <div className="form-section">
         <h3>Football Coaching Details</h3>
-        <label>Child&apos;s Name *<input value={form.name} onChange={(e) => set('name', e.target.value)} required /></label>
+        {enableNameHistory ? (
+          <NameHistoryInput
+            label="Child's Name *"
+            value={form.name}
+            onChange={(v) => set('name', v)}
+            onPick={(hint) => applyHistory(setForm, hint.autofill)}
+            searchFn={searchNames}
+            required
+            placeholder="Child name"
+          />
+        ) : (
+          <label>Child&apos;s Name *<input value={form.name} onChange={(e) => set('name', e.target.value)} required /></label>
+        )}
         <label>Parent Name<input value={form.parent_name} onChange={(e) => set('parent_name', e.target.value)} placeholder="Parent / guardian name" /></label>
         <label>Phone Number<input type="tel" value={form.phone} onChange={(e) => set('phone', e.target.value)} placeholder="10-digit mobile" /></label>
         <label>Coaching Month *

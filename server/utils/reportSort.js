@@ -1,6 +1,7 @@
 import { slotStartMinutes } from './time.js';
+import { SPORTS, sportLabel } from './sports.js';
 
-const SPORT_ORDER = { cricket: 0, football: 1, badminton: 2 };
+const SPORT_ORDER = Object.fromEntries(SPORTS.map((s, i) => [s, i]));
 
 export function sortTurfRows(rows) {
   return [...rows].sort((a, b) => {
@@ -24,12 +25,11 @@ export function sortGymRows(rows) {
 }
 
 export function groupTurfBySport(rows) {
-  const sports = ['cricket', 'football', 'badminton'];
   const sorted = sortTurfRows(rows);
-  return sports
+  return SPORTS
     .map((sport) => ({
       sport,
-      label: sport.charAt(0).toUpperCase() + sport.slice(1),
+      label: sportLabel(sport),
       rows: sorted.filter((r) => r.sport === sport),
     }))
     .filter((g) => g.rows.length > 0);

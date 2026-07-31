@@ -1,9 +1,14 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { SportGroupedTurfTable } from '../components/ReportTables';
+import { OnlineTable } from '../components/ReportTables';
 import { DownloadButtons } from '../components/ImageActionButtons';
-import { downloadReport, fetchReportPreview, formatCurrency, todayISO } from '../api';
-import { formatCoachingMonth } from '../utils/dates';
+import {
+  downloadReport,
+  fetchReportPreview,
+  formatCurrency,
+  formatDateDMY,
+  todayISO,
+} from '../api';
 import { downloadReportImage, shareReportImage } from '../utils/reportImage';
 
 function currentMonthISO() {
@@ -34,7 +39,11 @@ function matchTotals(rows) {
 
 export default function OnlineMatchReport() {
   const [mode, setMode] = useState('match'); // match | payment
+  const [periodMode, setPeriodMode] = useState('month');
   const [month, setMonth] = useState(currentMonthISO());
+  const initialRange = monthRange(currentMonthISO());
+  const [customFrom, setCustomFrom] = useState(initialRange.from);
+  const [customTo, setCustomTo] = useState(initialRange.to);
   const [rows, setRows] = useState([]);
   const [loaded, setLoaded] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -42,22 +51,24 @@ export default function OnlineMatchReport() {
   const [previewData, setPreviewData] = useState(null);
 
   const reportParams = useMemo(() => {
-    if (!month) return null;
-    const { from, to } = monthRange(month);
+    const range = periodMode === 'month'
+      ? monthRange(month)
+      : { from: customFrom, to: customTo };
+    if (!range.from || !range.to) return null;
     if (mode === 'payment') {
       return {
-        from,
-        to,
+        from: range.from,
+        to: range.to,
         filter_type: 'payment',
         section: 'online',
       };
     }
     return {
-      from,
-      to,
+      from: range.from,
+      to: range.to,
       section: 'online',
     };
-  }, [mode, month]);
+  }, [mode, periodMode, month, customFrom, customTo]);
 
   const totals = useMemo(() => matchTotals(rows), [rows]);
 
@@ -92,11 +103,15 @@ export default function OnlineMatchReport() {
     <div className="page">
       <div className="card-title-row">
         <h2>Online Match Report</h2>
-        <Link to="/report" className="btn small">All Reports</Link>
+        <div className="card-actions">
+          <Link to="/add?tab=online" className="btn small">Add Historical Online Match</Link>
+          <Link to="/online-settlements" className="btn small primary">Credits &amp; Commission</Link>
+          <Link to="/report" className="btn small">All Reports</Link>
+        </div>
       </div>
 
       <div className="card highlight-payment">
-        <h3>Month-wise online matches</h3>
+        <h3>Online matches &amp; payments</h3>
         <p className="hint">
           View online bookings for a month — by <strong>match date</strong> or by <strong>payments in that month</strong> — then download image / Excel.
         </p>
@@ -110,6 +125,14 @@ export default function OnlineMatchReport() {
             </select>
           </label>
           <label>
+            Period
+            <select value={periodMode} onChange={(e) => { setPeriodMode(e.target.value); setLoaded(false); }}>
+              <option value="month">Month</option>
+              <option value="range">Custom start / end date</option>
+            </select>
+          </label>
+          {periodMode === 'month' ? (
+          <label>
             Month
             <input
               type="month"
@@ -117,6 +140,12 @@ export default function OnlineMatchReport() {
               onChange={(e) => { setMonth(e.target.value); setLoaded(false); setRows([]); }}
             />
           </label>
+          ) : (
+            <>
+              <label>From<input type="date" value={customFrom} onChange={(e) => { setCustomFrom(e.target.value); setLoaded(false); }} /></label>
+              <label>To<input type="date" value={customTo} onChange={(e) => { setCustomTo(e.target.value); setLoaded(false); }} /></label>
+            </>
+          )}
         </div>
 
         <div className="row-2">
@@ -124,7 +153,7 @@ export default function OnlineMatchReport() {
             {loading ? 'Loading...' : 'Show List'}
           </button>
           <DownloadButtons
-            disabled={downloading || !month}
+            disabled={downloading || !reportParams}
             onExcel={() => withDownload(() => downloadReport(reportParams))}
             onImage={() => withDownload(() => downloadReportImage(reportParams, previewData))}
             onWhatsApp={() => withDownload(() => shareReportImage(reportParams, previewData))}
@@ -137,8 +166,8 @@ export default function OnlineMatchReport() {
           <div className="card-title-row">
             <h3>
               {mode === 'payment'
-                ? `Online paid in ${formatCoachingMonth(month)}`
-                : `Online matches — ${formatCoachingMonth(month)}`}
+                ? `Online received — ${formatDateDMY(reportParams.from)} to ${formatDateDMY(reportParams.to)}`
+                : `Online matches — ${formatDateDMY(reportParams.from)} to ${formatDateDMY(reportParams.to)}`}
             </h3>
             <span className="badge pending">{rows.length} record(s)</span>
           </div>
@@ -162,7 +191,7 @@ export default function OnlineMatchReport() {
             </div>
           </div>
 
-          <SportGroupedTurfTable rows={rows} emptyLabel="No online records for this month" />
+          <OnlineTable rows={rows} />
 
           <div className="preview-actions" style={{ marginTop: 12 }}>
             <DownloadButtons

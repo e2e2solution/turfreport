@@ -25,9 +25,11 @@ export default function OwnerReportPreview({ report, exportRef }) {
 
   const turfRows = (pr.turf_online || []).map((r) => [
     r.name,
+    r.booking_channel || 'Turf',
     r.sport,
     r.time_slot || '—',
     formatCurrency(r.total),
+    r.commission ? formatCurrency(r.commission) : '—',
   ]);
 
   const gymRows = (pr.gym || [])
@@ -57,7 +59,7 @@ export default function OwnerReportPreview({ report, exportRef }) {
 
       <h4>Turf + Online</h4>
       <OwnerMiniTable
-        headers={['Name', 'Sport', 'Time', 'Paid']}
+        headers={['Name', 'Channel', 'Sport', 'Time', 'Paid', 'Commission']}
         rows={turfRows}
         empty="No turf/online payments"
       />

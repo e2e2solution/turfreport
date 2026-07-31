@@ -14,9 +14,9 @@ router.get('/daily-total', (req, res) => {
 });
 
 router.get('/preview', (req, res) => {
-  const { from, to, match_date, filter_type, section, include_bulk_pending } = req.query;
+  const { from, to, match_date, filter_type, section, include_bulk_pending, online_match_day } = req.query;
   const data = queryReportData({
-    from, to, match_date, filter_type, section: section || 'all', include_bulk_pending,
+    from, to, match_date, filter_type, section: section || 'all', include_bulk_pending, online_match_day,
   });
   if (data.paymentFilter) {
     data.gym_members_joined = countGymMembersJoined(data.gym);
@@ -25,9 +25,9 @@ router.get('/preview', (req, res) => {
 });
 
 router.get('/excel', async (req, res) => {
-  const { from, to, match_date, filter_type, section, include_bulk_pending } = req.query;
+  const { from, to, match_date, filter_type, section, include_bulk_pending, online_match_day } = req.query;
   const { turf, online, gym, football_coaching, paymentFilter } = queryReportData({
-    from, to, match_date, filter_type, section: section || 'turf_online', include_bulk_pending,
+    from, to, match_date, filter_type, section: section || 'turf_online', include_bulk_pending, online_match_day,
   });
 
   const workbook = new ExcelJS.Workbook();

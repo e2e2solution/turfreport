@@ -377,11 +377,13 @@ export default function OwnerApp({ standalone = false, native = false }) {
 
   const highlights = report?.highlights || (report?.collection ? {
     turf: collection.turf?.total || 0,
+    online: collection.online?.total || 0,
     badminton: collection.badminton?.total || 0,
     gym: collection.gym?.total || 0,
     coaching: collection.football_coaching?.total || 0,
     gpay: collection.gpay || 0,
     cash: collection.cash || 0,
+    bank: collection.bank || 0,
     total: collection.total || 0,
   } : null);
 
@@ -471,6 +473,10 @@ export default function OwnerApp({ standalone = false, native = false }) {
                 <span>Turf</span>
                 <strong>{formatCurrency(highlights.turf)}</strong>
               </div>
+              <div className="owner-highlight owner-hl-online">
+                <span>Online</span>
+                <strong>{formatCurrency(highlights.online || 0)}</strong>
+              </div>
               <div className="owner-highlight owner-hl-badminton">
                 <SportMiniAnim sport="badminton" />
                 <span>Badminton</span>
@@ -493,6 +499,10 @@ export default function OwnerApp({ standalone = false, native = false }) {
               <div className="owner-highlight owner-hl-cash">
                 <span>Cash</span>
                 <strong>{formatCurrency(highlights.cash)}</strong>
+              </div>
+              <div className="owner-highlight owner-hl-online">
+                <span>Online Bank Credit</span>
+                <strong>{formatCurrency(highlights.bank || 0)}</strong>
               </div>
             </div>
           )}
@@ -544,11 +554,13 @@ export default function OwnerApp({ standalone = false, native = false }) {
             <h3>Collection Details</h3>
             <div className="owner-totals owner-totals-standalone">
               <div><span>Turf</span><strong>{formatCurrency(collection.turf?.total)}</strong></div>
+              <div><span>Online</span><strong>{formatCurrency(collection.online?.total || 0)}</strong></div>
               <div><span>Badminton</span><strong>{formatCurrency(collection.badminton?.total)}</strong></div>
               <div><span>Gym</span><strong>{formatCurrency(collection.gym?.total)}</strong></div>
               <div><span>Coaching</span><strong>{formatCurrency(collection.football_coaching?.total || 0)}</strong></div>
               <div><span>GPay</span><strong>{formatCurrency(collection.gpay)}</strong></div>
               <div><span>Cash</span><strong>{formatCurrency(collection.cash)}</strong></div>
+              <div><span>Online Bank Credit</span><strong>{formatCurrency(collection.bank || 0)}</strong></div>
             </div>
           </div>
 

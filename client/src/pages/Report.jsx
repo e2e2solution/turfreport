@@ -2,7 +2,12 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { TabBar } from '../components/BookingForm';
 import TimeSlotPicker from '../components/TimeSlotPicker';
-import { GymTable, SportGroupedTurfTable, FootballCoachingTable } from '../components/ReportTables';
+import {
+  FootballCoachingTable,
+  GymTable,
+  OnlineTable,
+  SportGroupedTurfTable,
+} from '../components/ReportTables';
 import { DownloadButtons } from '../components/ImageActionButtons';
 import {
   downloadReport, fetchReportPreview, todayISO,
@@ -272,10 +277,7 @@ export default function Report() {
   });
 
   const dailyCombined = dailyReport;
-  const turfOnlineRows = dailyReport
-    ? [...(dailyReport.turf || []), ...(dailyReport.online || [])]
-    : [];
-  const pendingBulkCount = turfOnlineRows.filter(
+  const pendingBulkCount = (dailyReport?.turf || []).filter(
     (r) => r.is_bulk && r.bulk_session_id && !r.is_bulk_payment
   ).length;
 
@@ -285,7 +287,10 @@ export default function Report() {
 
       <div className="card highlight-daily">
         <h3>Daily Report</h3>
-        <p className="hint">Advance &amp; balance paid on this date — Turf, Online, Gym, Football Coaching — plus pending bulk entries</p>
+        <p className="hint">
+          Turf / Gym / Coaching by payment date. Online shows matches played this day (pending mPay / Online Pay visible).
+          Totals only include Direct GPay now, and credited amounts after you split bank credit.
+        </p>
         <label>
           Payment Date
           <input type="date" value={dailyDate} onChange={(e) => setDailyDate(e.target.value)} />
@@ -351,18 +356,32 @@ export default function Report() {
         {dailyReport && (
           <>
             <div className="preview-section highlight-payment-inline">
-              <h4>Turf + Online — Payments Received (Advance or Balance)</h4>
+              <h4>Turf — Payments Received (Advance or Balance)</h4>
               <p className="hint">
                 Paid on {dailyDate}
                 {pendingBulkCount > 0 && (
                   <> · <strong>{pendingBulkCount} pending bulk</strong> (no payment — shown below)</>
                 )}
+                {' '}· Linked football/badminton (etc.) pairs share the same row colour; amount only on the booking where it was entered
               </p>
               <SportGroupedTurfTable
-                rows={turfOnlineRows}
+                rows={dailyReport.turf || []}
                 onDeleteBulk={handleDeleteBulkSession}
                 onEditBulk={handleEditBulkSession}
-                emptyLabel="No turf or online records for this date"
+                emptyLabel="No turf payments for this date"
+              />
+            </div>
+
+            <div className="preview-section highlight-payment-inline">
+              <h4>Online — Today (matches + Direct GPay)</h4>
+              <p className="hint">
+                Matches on this date stay visible (including pending mPay / Online Pay). Direct GPay paid today
+                also appears here and enters the daily sum immediately. Pending mPay / Online Pay do not enter
+                the total until Credits &amp; Commission is saved.
+              </p>
+              <OnlineTable
+                rows={dailyReport.online || []}
+                onDeleteBulk={handleDeleteBulkSession}
               />
             </div>
 
@@ -533,7 +552,7 @@ export default function Report() {
               <SportGroupedTurfTable rows={paymentPreview.turf} emptyLabel="No turf payments" />
             )}
             {paymentPreviewTab === 'online' && (
-              <SportGroupedTurfTable rows={paymentPreview.online} emptyLabel="No online payments" />
+              <OnlineTable rows={paymentPreview.online} />
             )}
           </div>
         )}

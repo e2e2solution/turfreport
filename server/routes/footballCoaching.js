@@ -2,6 +2,7 @@ import { Router } from 'express';
 import db from '../db.js';
 import { parseNum } from '../utils/excel.js';
 import { appendAnyPayment } from '../utils/reportQuery.js';
+import { searchFootballCoachingNameHistory } from '../utils/nameHistory.js';
 
 const router = Router();
 const PERIODS = ['full', 'first_half', 'second_half'];
@@ -42,6 +43,10 @@ router.get('/', (req, res) => {
 
   sql += ' ORDER BY coaching_month DESC, id DESC';
   res.json(db.prepare(sql).all(...params));
+});
+
+router.get('/name-search', (req, res) => {
+  res.json(searchFootballCoachingNameHistory(req.query.q));
 });
 
 router.get('/:id', (req, res) => {

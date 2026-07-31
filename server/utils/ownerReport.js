@@ -3,8 +3,7 @@ import { calcDailyCollection } from './dailyCollection.js';
 import { slotHours } from './time.js';
 import { queryReportData } from './reportQuery.js';
 import { countGymMembersJoined, gymMemberCountForName } from './gymCount.js';
-
-const SPORTS = ['cricket', 'football', 'badminton'];
+import { SPORTS } from './sports.js';
 
 function ceilHours(h) {
   return Math.ceil(h || 0);
@@ -32,11 +31,17 @@ function buildPaymentReport(paymentDate) {
     include_bulk_pending: '1',
   });
 
-  const turfOnline = [...data.turf, ...data.online].map((r) => ({
+  const turfOnline = [
+    ...data.turf.map((row) => ({ ...row, booking_channel: 'Turf' })),
+    ...data.online.map((row) => ({ ...row, booking_channel: 'Online' })),
+  ].map((r) => ({
     name: r.name,
     sport: r.sport,
     time_slot: r.time_slot,
     bulk_id: r.is_bulk ? r.bulk_id : null,
+    booking_channel: r.booking_channel,
+    payment_method: r.payment_method || null,
+    commission: r.commission_amount || 0,
     ...paymentOnDate(r, paymentDate),
   }));
 
@@ -108,6 +113,7 @@ export function buildOwnerReportSnapshot(paymentDate) {
 
   const collectionChart = [
     { label: 'Turf', amount: collection.turf.total },
+    { label: 'Online', amount: collection.online?.total || 0 },
     { label: 'Badminton', amount: collection.badminton.total },
     { label: 'Gym', amount: collection.gym.total },
     { label: 'Football Coaching', amount: collection.football_coaching?.total || 0 },
@@ -123,20 +129,24 @@ export function buildOwnerReportSnapshot(paymentDate) {
     pushed_at: new Date().toISOString(),
     collection: {
       turf: collection.turf,
+      online: collection.online,
       badminton: collection.badminton,
       gym: collection.gym,
       football_coaching: collection.football_coaching,
       gpay: collection.gpay,
       cash: collection.cash,
+      bank: collection.bank || 0,
       total: collection.total,
     },
     highlights: {
       turf: collection.turf.total,
+      online: collection.online?.total || 0,
       badminton: collection.badminton.total,
       gym: collection.gym.total,
       coaching: collection.football_coaching?.total || 0,
       gpay: collection.gpay,
       cash: collection.cash,
+      bank: collection.bank || 0,
       total: collection.total,
     },
     gym_members_joined: paymentReport.gym_members_joined,

@@ -2,10 +2,10 @@ import { Router } from 'express';
 import db from '../db.js';
 import { parseNum } from '../utils/excel.js';
 import { calcSessionHours, getBulkWithSessions } from '../utils/bulk.js';
+import { SPORTS } from '../utils/sports.js';
 
 const router = Router();
 const CATEGORIES = ['turf', 'online', 'gym'];
-const SPORTS = ['cricket', 'football', 'badminton'];
 
 router.get('/', (req, res) => {
   const { status, category } = req.query;

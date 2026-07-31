@@ -2,11 +2,13 @@ import { Router } from 'express';
 import db from '../db.js';
 import { parseNum } from '../utils/excel.js';
 import { appendAnyPayment } from '../utils/reportQuery.js';
+import { searchTurfNameHistory } from '../utils/nameHistory.js';
+import { resolveBookingLinkGroup } from '../utils/bookingLinks.js';
 
 const router = Router();
 
 router.get('/', (req, res) => {
-  const { date, match_date, status, filter_type } = req.query;
+  const { date, match_date, status, filter_type, exclude_id } = req.query;
   let sql = 'SELECT * FROM bookings WHERE 1=1';
   const params = [];
 
@@ -25,9 +27,17 @@ router.get('/', (req, res) => {
     sql += ' AND status = ?';
     params.push(status);
   }
+  if (exclude_id) {
+    sql += ' AND id != ?';
+    params.push(Number(exclude_id));
+  }
 
   sql += ' ORDER BY match_date DESC, id DESC';
   res.json(db.prepare(sql).all(...params));
+});
+
+router.get('/name-search', (req, res) => {
+  res.json(searchTurfNameHistory(req.query.q));
 });
 
 router.get('/:id', (req, res) => {
@@ -38,15 +48,22 @@ router.get('/:id', (req, res) => {
 
 router.post('/', (req, res) => {
   const b = req.body;
-  if (!b.name || !b.sport || !b.match_date || !b.total || !b.time_slot) {
+  if (!b.name || !b.sport || !b.match_date || b.total === undefined || b.total === null || b.total === '' || !b.time_slot) {
     return res.status(400).json({ error: 'name, sport, match_date, total, time_slot are required' });
+  }
+
+  let linkGroupId = null;
+  try {
+    linkGroupId = resolveBookingLinkGroup(b);
+  } catch (err) {
+    return res.status(err.status || 400).json({ error: err.message });
   }
 
   const result = db.prepare(`
     INSERT INTO bookings (name, sport, match_date, total, time_slot,
       advance_gpay, advance_cash, advance_date,
-      balance_gpay, balance_cash, balance_date, status, remarks)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      balance_gpay, balance_cash, balance_date, status, remarks, link_group_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     b.name.trim(),
     b.sport,
@@ -60,7 +77,8 @@ router.post('/', (req, res) => {
     parseNum(b.balance_cash),
     b.balance_date || null,
     b.status || 'PENDING',
-    (b.remarks || '').trim()
+    (b.remarks || '').trim(),
+    linkGroupId
   );
 
   res.status(201).json(db.prepare('SELECT * FROM bookings WHERE id = ?').get(result.lastInsertRowid));
@@ -71,12 +89,21 @@ router.put('/:id', (req, res) => {
   if (!existing) return res.status(404).json({ error: 'Not found' });
 
   const b = req.body;
+  let linkGroupId = existing.link_group_id || null;
+  try {
+    if (b.link_booking_id !== undefined || b.link_group_id !== undefined) {
+      linkGroupId = resolveBookingLinkGroup(b, existing);
+    }
+  } catch (err) {
+    return res.status(err.status || 400).json({ error: err.message });
+  }
+
   db.prepare(`
     UPDATE bookings SET
       name = ?, sport = ?, match_date = ?, total = ?, time_slot = ?,
       advance_gpay = ?, advance_cash = ?, advance_date = ?,
       balance_gpay = ?, balance_cash = ?, balance_date = ?,
-      status = ?, remarks = ?
+      status = ?, remarks = ?, link_group_id = ?
     WHERE id = ?
   `).run(
     (b.name || existing.name).trim(),
@@ -92,6 +119,7 @@ router.put('/:id', (req, res) => {
     b.balance_date !== undefined ? (b.balance_date || null) : existing.balance_date,
     b.status || existing.status,
     (b.remarks ?? existing.remarks ?? '').trim(),
+    linkGroupId,
     req.params.id
   );
 

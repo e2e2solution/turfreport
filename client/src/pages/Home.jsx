@@ -106,11 +106,13 @@ export default function Home() {
         {total && (
           <div className="daily-total">
             <div className="total-row total-row-anim"><SportMiniAnim sport="turf" /><span>Turf</span><strong>{formatCurrency(total.turf.total)}</strong></div>
+            <div className="total-row total-row-anim"><span>🖥️</span><span>Online</span><strong>{formatCurrency(total.online?.total || 0)}</strong></div>
             <div className="total-row total-row-anim"><SportMiniAnim sport="badminton" /><span>Badminton</span><strong>{formatCurrency(total.badminton.total)}</strong></div>
             <div className="total-row total-row-anim"><SportMiniAnim sport="gym" /><span>Gym</span><strong>{formatCurrency(total.gym.total)}</strong></div>
             <div className="total-row total-row-anim"><SportMiniAnim sport="coaching" /><span>Football Coaching</span><strong>{formatCurrency(total.football_coaching?.total || 0)}</strong></div>
             <div className="total-row"><span>GPay</span><strong>{formatCurrency(total.gpay)}</strong></div>
             <div className="total-row"><span>Cash</span><strong>{formatCurrency(total.cash)}</strong></div>
+            <div className="total-row"><span>Online Bank Credit</span><strong>{formatCurrency(total.bank || 0)}</strong></div>
             <div className="total-row grand highlighted-total">
               <span>Total Collected</span>
               <strong>{formatCurrency(total.total)}</strong>
@@ -221,6 +223,10 @@ export default function Home() {
         <Link to="/online-report" className="action-card">
           <span className="action-icon">🖥️</span>
           <span>Online Match — Month Report</span>
+        </Link>
+        <Link to="/online-settlements" className="action-card">
+          <span className="action-icon">🏦</span>
+          <span>Online Credits &amp; Commission</span>
         </Link>
         <Link to="/turf-report" className="action-card">
           <span className="action-icon">🏟️</span>

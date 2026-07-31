@@ -1003,6 +1003,33 @@ textarea:focus {
   font-style: italic;
 }
 
+.report-table tr.linked-booking-row.linked-hue-0 {
+  background: #e3f2fd !important;
+}
+.report-table tr.linked-booking-row.linked-hue-1 {
+  background: #e8f5e9 !important;
+}
+.report-table tr.linked-booking-row.linked-hue-2 {
+  background: #fce4ec !important;
+}
+.report-table tr.linked-booking-row.linked-hue-3 {
+  background: #fff8e1 !important;
+}
+.report-table tr.linked-booking-row.linked-hue-4 {
+  background: #e0f7fa !important;
+}
+.report-table tr.linked-booking-row.linked-hue-5 {
+  background: #f3e5f5 !important;
+}
+
+.badge.linked {
+  background: #37474f;
+  color: #fff;
+  font-size: 0.65rem;
+  font-weight: 600;
+  vertical-align: middle;
+}
+
 .report-table td.bulk-time-cell {
   white-space: normal;
   min-width: 140px;
@@ -2408,6 +2435,213 @@ textarea:focus {
   font-size: 0.9rem;
 }
 
+.online-credit-report {
+  overflow: visible;
+  min-width: 720px;
+  width: max-content;
+  max-width: none;
+}
+
+.online-credit-block {
+  border: 1px solid #dbe3f0;
+  border-radius: 10px;
+  padding: 0.85rem;
+  margin-bottom: 0.85rem;
+  background: #f8fafc;
+}
+
+.online-credit-block-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.65rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.online-credit-block-meta,
+.online-credit-block-totals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  margin-top: 0.35rem;
+  color: #475569;
+  font-size: 0.9rem;
+}
+
+.online-credit-block-totals span {
+  border-radius: 999px;
+  padding: 0.25rem 0.7rem;
+  font-weight: 700;
+}
+
+/* Gross = blue, Received = green, Commission = amber */
+.stat-card.online-amt-gross,
+.online-credit-block-totals .online-amt-gross {
+  background: #dbeafe;
+  border: 1px solid #93c5fd;
+  color: #1d4ed8;
+}
+
+.stat-card.online-amt-gross strong {
+  color: #1d4ed8;
+}
+
+.stat-card.online-amt-received,
+.online-credit-block-totals .online-amt-received {
+  background: #dcfce7;
+  border: 1px solid #86efac;
+  color: #15803d;
+}
+
+.stat-card.online-amt-received strong,
+.online-credit-received-value {
+  color: #15803d;
+  font-weight: 700;
+}
+
+.stat-card.online-amt-commission,
+.online-credit-block-totals .online-amt-commission {
+  background: #ffedd5;
+  border: 1px solid #fdba74;
+  color: #c2410c;
+}
+
+.stat-card.online-amt-commission strong {
+  color: #c2410c;
+}
+
+.online-credit-grid > div.online-amt-cell {
+  border-radius: 8px;
+  padding: 0.4rem 0.5rem;
+}
+
+.online-credit-grid > div.online-amt-cell.online-amt-gross {
+  background: #dbeafe;
+  border: 1px solid #93c5fd;
+}
+
+.online-credit-grid > div.online-amt-cell.online-amt-gross strong {
+  color: #1d4ed8;
+}
+
+.online-credit-grid > div.online-amt-cell.online-amt-received {
+  background: #dcfce7;
+  border: 1px solid #86efac;
+}
+
+.online-credit-grid > div.online-amt-cell.online-amt-received strong {
+  color: #15803d;
+}
+
+.online-credit-grid > div.online-amt-cell.online-amt-commission {
+  background: #ffedd5;
+  border: 1px solid #fdba74;
+}
+
+.online-credit-grid > div.online-amt-cell.online-amt-commission strong {
+  color: #c2410c;
+}
+
+.online-credit-row {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 0.75rem;
+  margin-bottom: 0.55rem;
+}
+
+.online-credit-main {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  margin-bottom: 0.55rem;
+}
+
+.online-credit-main small {
+  color: #64748b;
+}
+
+.online-credit-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(140px, 1fr));
+  gap: 0.55rem 0.75rem;
+}
+
+.online-credit-grid > div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.online-credit-label {
+  color: #64748b;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.online-credit-grid strong {
+  font-size: 0.95rem;
+  color: #0f172a;
+  word-break: break-word;
+}
+
+@media (max-width: 700px) {
+  .online-credit-report:not(.online-credit-report-export) {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .online-credit-report:not(.online-credit-report-export) .online-credit-grid {
+    grid-template-columns: repeat(2, minmax(120px, 1fr));
+  }
+}
+
+.online-credit-report-export {
+  min-width: 860px !important;
+  width: 860px !important;
+  max-width: none !important;
+  overflow: visible !important;
+}
+
+.online-credit-report-export .online-credit-grid {
+  grid-template-columns: repeat(3, minmax(150px, 1fr)) !important;
+}
+
+.online-credit-amount-card {
+  background: #fff;
+}
+
+.online-credit-amount-title {
+  text-align: center;
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.55rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.online-credit-amount-title h4 {
+  margin: 0 0 0.2rem;
+  font-size: 1.05rem;
+  color: #0f172a;
+}
+
+.online-credit-amount-title p {
+  margin: 0;
+  color: #64748b;
+  font-size: 0.88rem;
+}
+
+.online-credit-amount-card.online-credit-report-export {
+  min-width: 860px !important;
+  width: 860px !important;
+  max-width: none !important;
+  overflow: visible !important;
+  padding: 1rem;
+}
+
 .pt-ready-trainer-group {
   margin-bottom: 1rem;
 }
@@ -2739,4 +2973,61 @@ textarea:focus {
 
 .owner-cafe-rank-low .owner-cafe-rank-body strong {
   color: #64748b;
+}
+
+.name-history-field {
+  position: relative;
+}
+
+.name-history-list {
+  position: absolute;
+  z-index: 30;
+  left: 0;
+  right: 0;
+  top: calc(100% - 1.4rem);
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.12);
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.name-history-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.15rem;
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid #e2e8f0;
+  background: #fff;
+  padding: 0.7rem 0.85rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.name-history-item:last-child {
+  border-bottom: 0;
+}
+
+.name-history-item:hover {
+  background: #eff6ff;
+}
+
+.name-history-item strong {
+  color: #0f172a;
+  font-size: 0.95rem;
+}
+
+.name-history-item small {
+  color: #64748b;
+  font-size: 0.8rem;
+  line-height: 1.3;
+}
+
+.name-history-empty {
+  padding: 0.75rem 0.85rem;
+  color: #64748b;
+  font-size: 0.85rem;
 }

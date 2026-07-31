@@ -2,14 +2,13 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { TabBar } from '../components/BookingForm';
 import { createBulkPackage } from '../api';
+import { SPORTS, sportLabel } from '../utils/sports';
 
 const CATEGORY_TABS = [
   { id: 'turf', label: 'Turf' },
   { id: 'online', label: 'Online' },
   { id: 'gym', label: 'Gym' },
 ];
-
-const SPORTS = ['cricket', 'football', 'badminton'];
 
 export default function AddBulk() {
   const [category, setCategory] = useState('turf');
@@ -54,7 +53,7 @@ export default function AddBulk() {
             <label>
               Sport
               <select value={form.sport} onChange={(e) => set('sport', e.target.value)}>
-                {SPORTS.map((s) => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
+                {SPORTS.map((s) => <option key={s} value={s}>{sportLabel(s)}</option>)}
               </select>
             </label>
           )}

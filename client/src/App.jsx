@@ -20,6 +20,7 @@ import PTReport from './pages/PTReport';
 import CafeReport from './pages/CafeReport';
 import FootballCoachingReport from './pages/FootballCoachingReport';
 import OnlineMatchReport from './pages/OnlineMatchReport';
+import OnlineSettlements from './pages/OnlineSettlements';
 import TurfMatchReport from './pages/TurfMatchReport';
 
 function AppRoutes() {
@@ -38,6 +39,7 @@ function AppRoutes() {
               <Route path="/report" element={<Report />} />
               <Route path="/football-coaching" element={<FootballCoachingReport />} />
               <Route path="/online-report" element={<OnlineMatchReport />} />
+              <Route path="/online-settlements" element={<OnlineSettlements />} />
               <Route path="/turf-report" element={<TurfMatchReport />} />
               <Route path="/bulk" element={<BulkList />} />
               <Route path="/bulk/add" element={<AddBulk />} />

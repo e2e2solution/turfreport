@@ -110,7 +110,46 @@ export function buildTurfSheet(sheet, rows) {
 }
 
 export function buildOnlineSheet(sheet, rows) {
-  buildTurfSheet(sheet, rows);
+  const headers = [
+    'NAME', 'SPORT', 'MATCH', 'TOTAL', 'TIME',
+    'ADVANCE AMOUNT', 'ADVANCE METHOD', 'ADVANCE DATE', 'ADV EXPECTED CREDIT',
+    'BALANCE AMOUNT', 'BALANCE METHOD', 'BALANCE DATE', 'BAL EXPECTED CREDIT',
+    'BANK RECEIVED', 'COMMISSION', 'STATUS', 'REMARKS',
+  ];
+  headers.forEach((header, index) => {
+    setHeader(sheet, `${String.fromCharCode(65 + index)}1`, header, onlineHeader, darkFont);
+  });
+  sheet.getRow(1).height = 32;
+  sheet.columns = headers.map((_, index) => ({
+    width: [18, 12, 14, 12, 18, 14, 16, 14, 18, 14, 16, 14, 18, 14, 14, 12, 22][index],
+  }));
+
+  const methodLabel = (value) => ({
+    DIRECT_GPAY: 'Direct GPay',
+    MPAY: 'mPay',
+    ONLINE_PAY: 'Online Pay',
+    MIXED: 'Mixed',
+  }[value] || value || 'Direct GPay');
+
+  writeDataRows(sheet, rows, (r) => [
+    r.name,
+    r.sport,
+    formatDateDMY(r.match_date),
+    r.total,
+    r.time_slot,
+    r.is_online_settlement ? '' : (r.advance_gpay || ''),
+    r.is_online_settlement ? `${methodLabel(r.payment_method)} Settlement` : methodLabel(r.advance_method),
+    formatDateDMY(r.is_online_settlement ? r.credit_date : r.advance_date),
+    formatDateDMY(r.advance_expected_credit_date),
+    r.is_online_settlement ? '' : (r.balance_gpay || ''),
+    r.is_online_settlement ? r.payment_stage : methodLabel(r.balance_method),
+    formatDateDMY(r.balance_date),
+    formatDateDMY(r.balance_expected_credit_date),
+    r.is_online_settlement ? r.received_amount : '',
+    r.is_online_settlement ? r.commission_amount : '',
+    r.status,
+    r.remarks || '',
+  ], 17, 2);
 }
 
 const periodLabel = (p) => ({

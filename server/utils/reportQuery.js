@@ -6,6 +6,13 @@ import {
   queryBulkSessionsInRange,
 } from './bulk.js';
 import { sortTurfRows, sortGymRows } from './reportSort.js';
+import {
+  enrichOnlineBooking,
+  queryOnlineDailyDisplayRows,
+  queryOnlineDirectReceivedRows,
+  queryOnlineSettlementRows,
+} from './onlinePayments.js';
+import { appendLinkedTurfBookings, annotateLinkedBookings } from './bookingLinks.js';
 
 function filterByMonth(sql, params, dateField, from, to, singleDate) {
   if (singleDate) {
@@ -87,9 +94,22 @@ function finalizeBulkRows(rows, sortFn) {
   return dedupeBulkSessionPaymentsSameDay(sortFn(dedupeBulkPaymentWithSession(rows)));
 }
 
-export function queryReportData({ from, to, match_date, filter_type, section, include_bulk_pending }) {
+export function queryReportData({
+  from,
+  to,
+  match_date,
+  filter_type,
+  section,
+  include_bulk_pending,
+  online_match_day,
+}) {
   const paymentFilter = filter_type === 'payment' || filter_type === 'balance' || filter_type === 'advance';
   const addBulkPending = include_bulk_pending === true || include_bulk_pending === '1' || include_bulk_pending === 'true';
+  // Daily report: show online by match date (pending visible), sum stays Direct GPay + settlements only.
+  const onlineMatchDay = online_match_day === true
+    || online_match_day === '1'
+    || online_match_day === 'true'
+    || addBulkPending;
 
   let turf = [];
   let online = [];
@@ -124,24 +144,34 @@ export function queryReportData({ from, to, match_date, filter_type, section, in
     if (addBulkPending && match_date) {
       turf = [...turf, ...queryBulkSessionsForDate(match_date, 'turf')];
     }
+    // Include linked same-day bookings (e.g. football paid + badminton empty).
+    turf = appendLinkedTurfBookings(turf, { match_date, from, to });
+    turf = annotateLinkedBookings(turf);
     turf = finalizeBulkRows(turf, sortTurfRows);
   }
 
   if (wantOnline) {
-    let onlineSql = 'SELECT * FROM online_bookings WHERE 1=1';
-    const onlineParams = [];
-    if (paymentFilter) {
-      onlineSql = appendAnyPayment(onlineSql, onlineParams, from, to, match_date);
+    if (paymentFilter && onlineMatchDay) {
+      // Daily report: show matches by match date (pending visible).
+      // Sum still uses Direct GPay + settlements only (calcDailyCollection).
+      online = queryOnlineDailyDisplayRows({ from, to, date: match_date });
+    } else if (paymentFilter) {
+      online = [
+        ...queryOnlineDirectReceivedRows({ from, to, date: match_date }),
+        ...queryOnlineSettlementRows({ from, to, date: match_date }),
+      ];
     } else {
+      let onlineSql = 'SELECT * FROM online_bookings WHERE 1=1';
+      const onlineParams = [];
       onlineSql = filterByDate(onlineSql, onlineParams, 'match_date', from, to, match_date);
+      onlineSql += ' ORDER BY match_date ASC, id ASC';
+      online = db.prepare(onlineSql).all(...onlineParams).map(enrichOnlineBooking);
     }
-    onlineSql += ' ORDER BY match_date ASC, id ASC';
-    online = db.prepare(onlineSql).all(...onlineParams);
     if (!paymentFilter && match_date) {
       online = [...online, ...queryBulkSessionsForDate(match_date, 'online')];
     } else if (!paymentFilter && from && to) {
       online = [...online, ...queryBulkSessionsInRange(from, to, 'online')];
-    } else if (paymentFilter) {
+    } else if (paymentFilter && !onlineMatchDay) {
       const bulkPay = match_date
         ? queryBulkPaymentsForDate(match_date, 'online')
         : (from && to ? queryBulkPaymentsInRange(from, to, 'online') : []);

@@ -66,6 +66,11 @@ export async function deleteBooking(id) {
   return request(`${API_BOOKINGS}/${id}`, { method: 'DELETE' });
 }
 
+export async function searchBookingNames(q) {
+  const qs = new URLSearchParams({ q }).toString();
+  return request(`${API_BOOKINGS}/name-search?${qs}`);
+}
+
 export async function fetchOnlineBookings(params = {}) {
   const qs = new URLSearchParams(params).toString();
   return request(`${API_ONLINE}${qs ? `?${qs}` : ''}`);
@@ -93,6 +98,41 @@ export async function updateOnlineBooking(id, data) {
 
 export async function deleteOnlineBooking(id) {
   return request(`${API_ONLINE}/${id}`, { method: 'DELETE' });
+}
+
+export async function searchOnlineNames(q) {
+  const qs = new URLSearchParams({ q }).toString();
+  return request(`${API_ONLINE}/name-search?${qs}`);
+}
+
+export async function fetchOnlineSettlementCandidates(params = {}) {
+  const qs = new URLSearchParams(params).toString();
+  return request(`${API_ONLINE}/settlement-candidates/list${qs ? `?${qs}` : ''}`);
+}
+
+export async function fetchOnlineSettlements(params = {}) {
+  const qs = new URLSearchParams(params).toString();
+  return request(`${API_ONLINE}/settlements/list${qs ? `?${qs}` : ''}`);
+}
+
+export async function createOnlineSettlement(data) {
+  return request(`${API_ONLINE}/settlements`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateOnlineSettlement(id, data) {
+  return request(`${API_ONLINE}/settlements/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteOnlineSettlement(id) {
+  return request(`${API_ONLINE}/settlements/${id}`, { method: 'DELETE' });
 }
 
 export async function fetchGymEntries(params = {}) {
@@ -124,6 +164,11 @@ export async function deleteGymEntry(id) {
   return request(`${API_GYM}/${id}`, { method: 'DELETE' });
 }
 
+export async function searchGymNames(q) {
+  const qs = new URLSearchParams({ q }).toString();
+  return request(`${API_GYM}/name-search?${qs}`);
+}
+
 export async function fetchFootballCoachingEntries(params = {}) {
   const qs = new URLSearchParams(params).toString();
   return request(`${API_FOOTBALL_COACHING}${qs ? `?${qs}` : ''}`);
@@ -151,6 +196,11 @@ export async function updateFootballCoachingEntry(id, data) {
 
 export async function deleteFootballCoachingEntry(id) {
   return request(`${API_FOOTBALL_COACHING}/${id}`, { method: 'DELETE' });
+}
+
+export async function searchFootballCoachingNames(q) {
+  const qs = new URLSearchParams({ q }).toString();
+  return request(`${API_FOOTBALL_COACHING}/name-search?${qs}`);
 }
 
 export async function fetchBulkPackages(params = {}) {

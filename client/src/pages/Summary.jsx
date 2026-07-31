@@ -6,6 +6,7 @@ import { TabBar } from '../components/BookingForm';
 import { fetchSummary, todayISO, formatCurrency } from '../api';
 import { downloadTurfSummaryImage, downloadGymSummaryImage, shareTurfSummaryImage, shareGymSummaryImage } from '../utils/summaryImage';
 import { ImageActionButtons } from '../components/ImageActionButtons';
+import { SPORTS, sportLabel } from '../utils/sports';
 
 const PERIODS = [
   { id: 'daily', label: 'Daily' },
@@ -13,7 +14,12 @@ const PERIODS = [
   { id: 'monthly', label: 'Monthly' },
 ];
 
-const SPORT_COLORS = { cricket: '#4472c4', football: '#92d050', badminton: '#f4b084' };
+const SPORT_COLORS = {
+  cricket: '#4472c4',
+  football: '#92d050',
+  badminton: '#f4b084',
+  cricket_ball: '#9e9e9e',
+};
 
 function StatCard({ label, value, sub }) {
   return (
@@ -112,7 +118,7 @@ export default function Summary() {
 
           <div className="card">
             <div className="card-title-row">
-              <h3>Turf Hours & Payment</h3>
+              <h3>Turf + Online Hours &amp; Received Payment</h3>
               <ImageActionButtons
                 small
                 disabled={downloading}
@@ -121,10 +127,10 @@ export default function Summary() {
               />
             </div>
             <div className="stat-grid">
-              {['cricket', 'football', 'badminton'].map((s) => (
+              {SPORTS.map((s) => (
                 <StatCard
                   key={s}
-                  label={s.charAt(0).toUpperCase() + s.slice(1)}
+                  label={sportLabel(s)}
                   value={`${data.turf[s].hours} hrs`}
                   sub={formatCurrency(data.turf[s].payment)}
                 />
@@ -134,8 +140,15 @@ export default function Summary() {
                 value={`${data.turf.overall.hours} hrs`}
                 sub={formatCurrency(data.turf.overall.payment)}
               />
+              <StatCard
+                label="Online Settled"
+                value={formatCurrency(data.online_received || 0)}
+                sub="Direct GPay + split bank credits"
+              />
             </div>
-            <p className="hint">{data.turf.overall.bookings} total bookings</p>
+            <p className="hint">
+              {data.turf.overall.bookings} total bookings · Pending mPay / Online Pay is excluded until settlement.
+            </p>
           </div>
 
           <div className="card">
@@ -206,6 +219,7 @@ export default function Summary() {
                     <Bar dataKey="cricket" stackId="h" fill={SPORT_COLORS.cricket} name="Cricket" />
                     <Bar dataKey="football" stackId="h" fill={SPORT_COLORS.football} name="Football" />
                     <Bar dataKey="badminton" stackId="h" fill={SPORT_COLORS.badminton} name="Badminton" />
+                    <Bar dataKey="cricket_ball" stackId="h" fill={SPORT_COLORS.cricket_ball} name="Cricket Ball" />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
