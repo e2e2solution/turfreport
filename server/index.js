@@ -64,16 +64,22 @@ app.use('/api/backup', authMiddleware, backupRouter);
 if (isProd) {
   const clientDist = path.join(__dirname, '../client/dist');
   const trainerDist = path.join(__dirname, '../client/dist-trainer');
+
   app.get('/owner', (_req, res) => {
     res.sendFile(path.join(clientDist, 'owner.html'));
   });
-  app.get('/trainer', (_req, res) => {
+
+  // Trainer must stay under /trainer — do NOT mount trainerDist at /
+  // or its index.html replaces the staff turf report site.
+  app.use('/trainer', express.static(trainerDist));
+  app.get(['/trainer', '/trainer/'], (_req, res) => {
     res.sendFile(path.join(trainerDist, 'trainer.html'));
   });
-  app.use(express.static(trainerDist));
+
   app.use(express.static(clientDist));
   app.get('*', (req, res, next) => {
     if (req.path.startsWith('/api')) return next();
+    if (req.path.startsWith('/trainer')) return next();
     res.sendFile(path.join(clientDist, 'index.html'));
   });
 }
