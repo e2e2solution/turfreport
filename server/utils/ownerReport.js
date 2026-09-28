@@ -1,4 +1,4 @@
-import db from '../db.js';
+import { findMany } from '../db/collections.js';
 import { calcDailyCollection } from './dailyCollection.js';
 import { slotHours } from './time.js';
 import { queryReportData } from './reportQuery.js';
@@ -23,8 +23,8 @@ function paymentOnDate(row, date) {
   return { gpay, cash, total: gpay + cash };
 }
 
-function buildPaymentReport(paymentDate) {
-  const data = queryReportData({
+async function buildPaymentReport(paymentDate) {
+  const data = await queryReportData({
     match_date: paymentDate,
     filter_type: 'payment',
     section: 'all',
@@ -72,30 +72,35 @@ function buildPaymentReport(paymentDate) {
   };
 }
 
-function calcDayHours(date) {
+async function calcDayHours(date) {
   const hours = Object.fromEntries(SPORTS.map((s) => [s, 0]));
 
-  const turfRows = db.prepare(
-    'SELECT sport, time_slot FROM bookings WHERE match_date = ?'
-  ).all(date);
-  const onlineRows = db.prepare(
-    'SELECT sport, time_slot FROM online_bookings WHERE match_date = ?'
-  ).all(date);
+  const turfRows = await findMany('bookings', { match_date: date }, {
+    projection: { sport: 1, time_slot: 1 },
+  });
+  const onlineRows = await findMany('online_bookings', { match_date: date }, {
+    projection: { sport: 1, time_slot: 1 },
+  });
   for (const row of [...turfRows, ...onlineRows]) {
     const sport = row.sport || 'cricket';
     if (hours[sport] !== undefined) hours[sport] += slotHours(row.time_slot);
   }
 
-  const bulkSessions = db.prepare(`
-    SELECT s.time_slot, s.hours, p.sport
-    FROM bulk_sessions s
-    JOIN bulk_packages p ON p.id = s.bulk_id
-    WHERE s.session_date = ? AND p.category IN ('turf', 'online')
-  `).all(date);
-  for (const row of bulkSessions) {
-    const sport = row.sport || 'cricket';
-    if (hours[sport] !== undefined) {
-      hours[sport] += row.hours || slotHours(row.time_slot);
+  const sessions = await findMany('bulk_sessions', { session_date: date });
+  if (sessions.length) {
+    const bulkIds = [...new Set(sessions.map((s) => s.bulk_id))];
+    const packages = await findMany('bulk_packages', {
+      id: { $in: bulkIds },
+      category: { $in: ['turf', 'online'] },
+    });
+    const pkgById = new Map(packages.map((p) => [p.id, p]));
+    for (const session of sessions) {
+      const pkg = pkgById.get(session.bulk_id);
+      if (!pkg) continue;
+      const sport = pkg.sport || 'cricket';
+      if (hours[sport] !== undefined) {
+        hours[sport] += session.hours || slotHours(session.time_slot);
+      }
     }
   }
 
@@ -106,10 +111,10 @@ function calcDayHours(date) {
   return rounded;
 }
 
-export function buildOwnerReportSnapshot(paymentDate) {
-  const collection = calcDailyCollection(paymentDate);
-  const hours = calcDayHours(paymentDate);
-  const paymentReport = buildPaymentReport(paymentDate);
+export async function buildOwnerReportSnapshot(paymentDate) {
+  const collection = await calcDailyCollection(paymentDate);
+  const hours = await calcDayHours(paymentDate);
+  const paymentReport = await buildPaymentReport(paymentDate);
 
   const collectionChart = [
     { label: 'Turf', amount: collection.turf.total },

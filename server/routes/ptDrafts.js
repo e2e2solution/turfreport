@@ -5,6 +5,7 @@ import {
   syncPtDraftToMongo,
   syncTrainerToMongo,
 } from '../db/mongo.js';
+import { findMany, findOne } from '../db/collections.js';
 import { applyPtDraftToSqlite } from '../utils/ptDraftApply.js';
 import {
   fetchPtDraftsFromCloud,
@@ -12,7 +13,6 @@ import {
   pushTrainerToCloud,
 } from '../utils/cloudSync.js';
 import { targetSessionsForPlan } from '../utils/pt.js';
-import db from '../db.js';
 
 const router = Router();
 
@@ -45,22 +45,29 @@ async function fetchDrafts(status) {
   return { drafts, via };
 }
 
-function getClientSessions(clientId) {
-  return db.prepare(`
-    SELECT session_date, notes FROM pt_sessions
-    WHERE client_id = ? ORDER BY session_date ASC
-  `).all(clientId);
+async function getClientSessions(clientId) {
+  return findMany('pt_sessions', { client_id: Number(clientId) }, {
+    sort: { session_date: 1 },
+    projection: { session_date: 1, notes: 1 },
+  });
 }
 
-function getClientFreezes(clientId) {
-  return db.prepare(`
-    SELECT freeze_from, freeze_to, days_count, reason, notes FROM pt_freezes
-    WHERE client_id = ? ORDER BY freeze_from ASC
-  `).all(clientId);
+async function getClientFreezes(clientId) {
+  return findMany('pt_freezes', { client_id: Number(clientId) }, {
+    sort: { freeze_from: 1 },
+    projection: { freeze_from: 1, freeze_to: 1, days_count: 1, reason: 1, notes: 1 },
+  });
 }
 
-/** Build a canonical published-client doc from a SQLite PT client row. */
-function buildClientDoc(client) {
+async function getClientWithTrainer(clientId) {
+  const client = await findOne('pt_clients', { id: Number(clientId) });
+  if (!client) return null;
+  const trainer = await findOne('pt_trainers', { id: Number(client.trainer_id) });
+  return { ...client, trainer_name: trainer?.name || '' };
+}
+
+/** Build a canonical published-client doc from a PT client row. */
+async function buildClientDoc(client) {
   const now = new Date().toISOString();
   return {
     draft_id: `client-${client.id}`,
@@ -84,23 +91,19 @@ function buildClientDoc(client) {
     pt_status: client.status || 'ACTIVE',
     completed_at: client.completed_at || null,
     notes: client.notes || '',
-    sessions: getClientSessions(client.id),
-    freezes: getClientFreezes(client.id),
+    sessions: await getClientSessions(client.id),
+    freezes: await getClientFreezes(client.id),
     published_at: now,
     updated_at: now,
   };
 }
 
-/** Apply a draft to SQLite and re-publish as confirmed in Mongo. */
+/** Apply a draft to Mongo PT collections and re-publish as confirmed. */
 async function confirmDraftToSqlite(draft) {
-  const { clientId, trainerId } = applyPtDraftToSqlite(draft);
-  const client = db.prepare(`
-    SELECT c.*, t.name AS trainer_name
-    FROM pt_clients c JOIN pt_trainers t ON t.id = c.trainer_id
-    WHERE c.id = ?
-  `).get(clientId);
+  const { clientId, trainerId } = await applyPtDraftToSqlite(draft);
+  const client = await getClientWithTrainer(clientId);
 
-  const confirmedDoc = buildClientDoc(client);
+  const confirmedDoc = await buildClientDoc(client);
   await persistDraftDoc(confirmedDoc);
 
   if (draft.draft_id !== confirmedDoc.draft_id) {
@@ -144,14 +147,16 @@ async function splitAndApplyDrafts(drafts) {
 /** Push all local PT clients to the cloud so trainers can see them. */
 router.post('/publish-clients', async (req, res) => {
   const trainerId = req.query.trainer_id;
-  const clients = db.prepare(`
-    SELECT c.*, t.name AS trainer_name
-    FROM pt_clients c
-    JOIN pt_trainers t ON t.id = c.trainer_id
-    ${trainerId ? 'WHERE c.trainer_id = ?' : ''}
-  `).all(...(trainerId ? [trainerId] : []));
+  const filter = trainerId ? { trainer_id: Number(trainerId) } : {};
+  const clients = await findMany('pt_clients', filter);
+  const trainers = await findMany('pt_trainers', {});
+  const nameById = new Map(trainers.map((t) => [t.id, t.name]));
+  const withNames = clients.map((c) => ({
+    ...c,
+    trainer_name: nameById.get(c.trainer_id) || '',
+  }));
 
-  if (!clients.length) {
+  if (!withNames.length) {
     return res.json({ published: 0, total: 0, skipped: 0 });
   }
 
@@ -166,14 +171,14 @@ router.post('/publish-clients', async (req, res) => {
   let skipped = 0;
   let lastError = '';
 
-  for (const client of clients) {
+  for (const client of withNames) {
     const current = byClientId.get(String(client.id));
     // Never overwrite trainer changes waiting for approval.
     if (current && REVIEW_STATUSES.includes(current.status)) {
       skipped += 1;
       continue;
     }
-    const doc = buildClientDoc(client);
+    const doc = await buildClientDoc(client);
     const r = await persistDraftDoc(doc);
     if (r.ok) published += 1;
     else lastError = r.error || lastError;
@@ -182,7 +187,7 @@ router.post('/publish-clients', async (req, res) => {
   if (published === 0 && lastError) {
     return res.status(503).json({ error: lastError });
   }
-  res.json({ published, total: clients.length, skipped });
+  res.json({ published, total: withNames.length, skipped });
 });
 
 /** Drafts + updates needing staff review. */
@@ -272,19 +277,14 @@ router.post('/drafts/:draftId/reject', async (req, res) => {
   if (!draft) return res.status(404).json({ error: 'Draft not found' });
 
   // If the draft edits an existing local client, revert the Mongo doc back to
-  // the canonical SQLite state so the trainer's rejected changes are discarded
+  // the canonical client state so the trainer's rejected changes are discarded
   // and they see the original client again (instead of it disappearing).
   const localClient = draft.local_client_id
-    ? db.prepare(`
-        SELECT c.*, t.name AS trainer_name
-        FROM pt_clients c
-        JOIN pt_trainers t ON t.id = c.trainer_id
-        WHERE c.id = ?
-      `).get(draft.local_client_id)
+    ? await getClientWithTrainer(draft.local_client_id)
     : null;
 
   const doc = localClient
-    ? buildClientDoc(localClient)
+    ? await buildClientDoc(localClient)
     : {
         ...draft,
         status: 'rejected',
@@ -298,7 +298,8 @@ router.post('/drafts/:draftId/reject', async (req, res) => {
 });
 
 router.post('/sync-trainers', async (_req, res) => {
-  const trainers = db.prepare('SELECT * FROM pt_trainers ORDER BY name COLLATE NOCASE ASC').all();
+  const trainers = await findMany('pt_trainers', {});
+  trainers.sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), undefined, { sensitivity: 'base' }));
   if (!trainers.length) {
     return res.json({ synced: 0, total: 0, results: [], via: 'none' });
   }

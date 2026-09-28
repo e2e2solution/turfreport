@@ -1,37 +1,70 @@
 import { Router } from 'express';
-import db from '../db.js';
+import { deleteOne } from '../db/collections.js';
 import { formatMonthLabel, parseCafeCsv } from '../utils/cafeCsv.js';
-import { getCafeReportFromSqlite, listCafeMonthsFromSqlite, reportToSnapshot } from '../utils/cafeStore.js';
+import {
+  buildCafeSnapshot,
+  getCafeReportFromSqlite,
+  listCafeMonthsFromSqlite,
+  reportToSnapshot,
+  saveCafeReport,
+} from '../utils/cafeStore.js';
+import { buildCafeMonthCompare, cafeCompareToCsv, cafeReportItemsToCsv } from '../utils/cafeCompare.js';
 import { syncCafeToMongo, getMongoError } from '../db/mongo.js';
 import { pushCafeToCloud } from '../utils/cloudSync.js';
 
 const router = Router();
 
 async function pushCafeSnapshotToOwner(snapshot) {
+  const mongo = await syncCafeToMongo(snapshot);
   let cloud = { ok: false };
-  let mongo = { ok: false };
-
-  if (process.env.CLOUD_SYNC_URL) {
+  if (!mongo.ok && process.env.CLOUD_SYNC_URL) {
     cloud = await pushCafeToCloud(snapshot);
   }
-  if (!cloud.ok) {
-    mongo = await syncCafeToMongo(snapshot);
-  }
-
   return { cloud, mongo, synced: cloud.ok || mongo.ok };
 }
 
-router.get('/months', (_req, res) => {
-  res.json(listCafeMonthsFromSqlite());
+router.get('/months', async (_req, res) => {
+  res.json(await listCafeMonthsFromSqlite());
 });
 
-router.get('/report', (req, res) => {
+router.get('/report', async (req, res) => {
   const { month } = req.query;
   if (!month) return res.status(400).json({ error: 'month is required (YYYY-MM)' });
 
-  const report = getCafeReportFromSqlite(month);
+  const report = await getCafeReportFromSqlite(month);
   if (!report) return res.status(404).json({ error: 'No cafe report for this month' });
   res.json(report);
+});
+
+router.get('/compare', async (req, res) => {
+  const { month } = req.query;
+  if (!month) return res.status(400).json({ error: 'month is required (YYYY-MM)' });
+
+  const payload = await buildCafeMonthCompare(month);
+  if (!payload) return res.status(404).json({ error: 'No cafe report for this month' });
+  res.json(payload);
+});
+
+router.get('/download', async (req, res) => {
+  const { month, type } = req.query;
+  if (!month) return res.status(400).json({ error: 'month is required (YYYY-MM)' });
+
+  if (type === 'compare') {
+    const payload = await buildCafeMonthCompare(month);
+    if (!payload) return res.status(404).json({ error: 'No cafe report for this month' });
+    const csv = cafeCompareToCsv(payload);
+    const filename = `Cafe_Compare_${month}_vs_${payload.compare.previous_month_key || 'none'}.csv`;
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    return res.send(csv);
+  }
+
+  const report = await getCafeReportFromSqlite(month);
+  if (!report) return res.status(404).json({ error: 'No cafe report for this month' });
+  const csv = cafeReportItemsToCsv(report);
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="Cafe_Results_${month}.csv"`);
+  return res.send(csv);
 });
 
 router.post('/upload', async (req, res) => {
@@ -47,37 +80,8 @@ router.post('/upload', async (req, res) => {
     return res.status(400).json({ error: err.message });
   }
 
-  const payload = {
-    categories: parsed.categories,
-    items: parsed.items,
-    analysis: parsed.analysis,
-  };
-
-  db.prepare(`
-    INSERT INTO cafe_reports (
-      month_key, period_from, period_to, business_name, source_filename,
-      grand_qty, grand_total, data, uploaded_at
-    )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
-    ON CONFLICT(month_key) DO UPDATE SET
-      period_from = excluded.period_from,
-      period_to = excluded.period_to,
-      business_name = excluded.business_name,
-      source_filename = excluded.source_filename,
-      grand_qty = excluded.grand_qty,
-      grand_total = excluded.grand_total,
-      data = excluded.data,
-      uploaded_at = datetime('now')
-  `).run(
-    parsed.month_key,
-    parsed.period_from,
-    parsed.period_to,
-    parsed.business_name || '',
-    parsed.source_filename || '',
-    parsed.analysis.summary.total_qty,
-    parsed.analysis.summary.total_amount,
-    JSON.stringify(payload),
-  );
+  const snapshot = buildCafeSnapshot(parsed);
+  await saveCafeReport(snapshot);
 
   res.status(201).json({
     message: `Cafe report saved for ${formatMonthLabel(parsed.month_key)}. Press Send to Owner to show on mobile app.`,
@@ -92,7 +96,7 @@ router.post('/push-to-owner', async (req, res) => {
   const month = req.body?.month;
   if (!month) return res.status(400).json({ error: 'month is required (YYYY-MM)' });
 
-  const report = getCafeReportFromSqlite(month);
+  const report = await getCafeReportFromSqlite(month);
   if (!report) return res.status(404).json({ error: 'No cafe report for this month. Upload CSV first.' });
 
   const snapshot = reportToSnapshot(report);
@@ -127,9 +131,9 @@ router.post('/push-to-owner', async (req, res) => {
   });
 });
 
-router.delete('/report/:monthKey', (req, res) => {
-  const result = db.prepare('DELETE FROM cafe_reports WHERE month_key = ?').run(req.params.monthKey);
-  if (result.changes === 0) return res.status(404).json({ error: 'Report not found' });
+router.delete('/report/:monthKey', async (req, res) => {
+  const ok = await deleteOne('cafe_reports', { month_key: req.params.monthKey });
+  if (!ok) return res.status(404).json({ error: 'Report not found' });
   res.json({ success: true });
 });
 

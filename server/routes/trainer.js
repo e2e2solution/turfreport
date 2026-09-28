@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { randomUUID } from 'crypto';
-import db from '../db.js';
+import { findOne } from '../db/collections.js';
 import {
   calcPtBaseEndDate,
   isValidPtGoal,
@@ -14,7 +14,6 @@ import {
   verifyTrainerPassword,
 } from '../middleware/trainerAuth.js';
 import {
-  findTrainerInMongoByName,
   getPtDraftFromMongo,
   listPtDraftsFromMongo,
   syncPtDraftToMongo,
@@ -57,19 +56,12 @@ async function getDraftFallback(draftId, trainerId) {
   return rest;
 }
 
-function findTrainerInSqlite(name) {
-  return db.prepare(`
-    SELECT * FROM pt_trainers
-    WHERE lower(trim(name)) = lower(trim(?))
-  `).get(name);
-}
-
 async function resolveTrainer(name) {
-  const local = findTrainerInSqlite(name);
-  if (local) return { id: local.id, name: local.name };
-  const mongo = await findTrainerInMongoByName(name);
-  if (mongo) return { id: mongo.trainer_id, name: mongo.name };
-  return null;
+  const trainer = await findOne('pt_trainers', {
+    name_lower: String(name || '').toLowerCase().trim(),
+  });
+  if (!trainer) return null;
+  return { id: trainer.id ?? trainer.trainer_id, name: trainer.name };
 }
 
 function sessionCount(draft) {

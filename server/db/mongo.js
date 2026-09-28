@@ -1,9 +1,21 @@
 import { MongoClient } from 'mongodb';
+import dns from 'dns';
 import { legacyReportToReview } from '../utils/reviewLegacy.js';
+
+/** Some Windows DNS servers refuse SRV lookups; Google/Cloudflare work for Atlas. */
+try {
+  dns.setServers(['8.8.8.8', '1.1.1.1', '8.8.4.4']);
+} catch { /* ignore */ }
 
 let client;
 let db;
 let lastError = '';
+
+function preferPublicDns() {
+  try {
+    dns.setServers(['8.8.8.8', '1.1.1.1', '8.8.4.4']);
+  } catch { /* ignore */ }
+}
 
 function uriLooksValid(uri) {
   if (!uri || uri.includes('YOUR_MONGODB_PASSWORD') || uri.includes('<db_password>')) {
@@ -20,14 +32,21 @@ export async function connectMongo() {
     return null;
   }
   try {
+    preferPublicDns();
     if (client) {
       try { await client.close(); } catch { /* ignore */ }
     }
     client = new MongoClient(uri, { serverSelectionTimeoutMS: 8000 });
     await client.connect();
-    db = client.db(process.env.MONGODB_DB || 'vsh_owner');
+    db = client.db(process.env.MONGODB_DB || 'vsh_app');
     lastError = '';
-    console.log('MongoDB connected for owner reports');
+    console.log(`MongoDB connected (${process.env.MONGODB_DB || 'vsh_app'})`);
+    try {
+      const { ensureIndexes } = await import('./collections.js');
+      await ensureIndexes();
+    } catch (idxErr) {
+      console.warn('Mongo index setup:', idxErr.message);
+    }
     return db;
   } catch (err) {
     lastError = err.message;

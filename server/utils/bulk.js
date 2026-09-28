@@ -1,4 +1,4 @@
-import db from '../db.js';
+import { findMany, findOne, paymentDateFilter } from '../db/collections.js';
 import { slotHours } from './time.js';
 
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -16,8 +16,8 @@ function bulkPeriodLabel(isoDate) {
   return `${MONTH_NAMES[mi] || m} ${y}`;
 }
 
-function buildBulkPaymentMeta(pkg) {
-  const sessions = getBulkSessions(pkg.id);
+async function buildBulkPaymentMeta(pkg) {
+  const sessions = await getBulkSessions(pkg.id);
   const usedHours = sessions.reduce((sum, s) => sum + (s.hours || 0), 0);
   const payDate = pkg.balance_date || pkg.advance_date || '';
   const customRemarks = pkg.remarks && pkg.remarks !== 'bulk' ? pkg.remarks.trim() : '';
@@ -52,20 +52,20 @@ function buildBulkPaymentMeta(pkg) {
   };
 }
 
-export function getBulkPackage(id) {
-  return db.prepare('SELECT * FROM bulk_packages WHERE id = ?').get(id);
+export async function getBulkPackage(id) {
+  return findOne('bulk_packages', { id: Number(id) });
 }
 
-export function getBulkSessions(bulkId) {
-  return db.prepare(
-    'SELECT * FROM bulk_sessions WHERE bulk_id = ? ORDER BY session_date ASC, id ASC'
-  ).all(bulkId);
+export async function getBulkSessions(bulkId) {
+  return findMany('bulk_sessions', { bulk_id: Number(bulkId) }, {
+    sort: { session_date: 1, id: 1 },
+  });
 }
 
-export function getBulkWithSessions(id) {
-  const pkg = getBulkPackage(id);
+export async function getBulkWithSessions(id) {
+  const pkg = await getBulkPackage(id);
   if (!pkg) return null;
-  const sessions = getBulkSessions(id);
+  const sessions = await getBulkSessions(id);
   const usedHours = sessions.reduce((sum, s) => sum + (s.hours || 0), 0);
   return { ...pkg, sessions, used_hours: usedHours };
 }
@@ -148,8 +148,8 @@ export function sessionToGymRow(session, pkg) {
   };
 }
 
-export function packageToTurfPaymentRow(pkg) {
-  const meta = buildBulkPaymentMeta(pkg);
+export async function packageToTurfPaymentRow(pkg) {
+  const meta = await buildBulkPaymentMeta(pkg);
   const pay = closedBulkPaymentDisplay(pkg);
   return {
     id: `bulk-p-${pkg.id}`,
@@ -175,8 +175,8 @@ export function packageToTurfPaymentRow(pkg) {
   };
 }
 
-export function packageToGymPaymentRow(pkg) {
-  const meta = buildBulkPaymentMeta(pkg);
+export async function packageToGymPaymentRow(pkg) {
+  const meta = await buildBulkPaymentMeta(pkg);
   const pay = closedBulkPaymentDisplay(pkg);
   return {
     id: `bulk-p-${pkg.id}`,
@@ -203,118 +203,90 @@ export function packageToGymPaymentRow(pkg) {
   };
 }
 
-function pkgFromSessionRow(row) {
-  return {
-    id: row.pkg_id,
-    category: row.category,
-    name: row.pkg_name,
-    sport: row.sport,
-    plan_months: row.plan_months,
-    status: row.pkg_status,
-    total_amount: row.total_amount,
-    advance_gpay: row.advance_gpay,
-    advance_cash: row.advance_cash,
-    advance_date: row.advance_date,
-    balance_gpay: row.balance_gpay,
-    balance_cash: row.balance_cash,
-    balance_date: row.balance_date,
-  };
-}
-
-export function queryBulkSessionsForDate(date, category) {
-  const rows = db.prepare(`
-    SELECT s.*, p.category, p.name AS pkg_name, p.sport, p.plan_months, p.id AS pkg_id, p.status AS pkg_status,
-      p.total_amount, p.advance_gpay, p.advance_cash, p.advance_date,
-      p.balance_gpay, p.balance_cash, p.balance_date
-    FROM bulk_sessions s
-    JOIN bulk_packages p ON p.id = s.bulk_id
-    WHERE s.session_date = ? AND p.category = ?
-    ORDER BY s.id ASC
-  `).all(date, category);
-
-  return rows.map((row) => {
-    const pkg = pkgFromSessionRow(row);
-    const session = {
-      id: row.id,
-      bulk_id: row.bulk_id,
-      session_date: row.session_date,
-      time_slot: row.time_slot,
-      hours: row.hours,
-      remarks: row.remarks,
-    };
-    return category === 'gym'
-      ? sessionToGymRow(session, pkg)
-      : sessionToTurfRow(session, pkg);
+async function mapSessionsWithPackages(sessions, category) {
+  if (!sessions.length) return [];
+  const bulkIds = [...new Set(sessions.map((s) => s.bulk_id))];
+  const packages = await findMany('bulk_packages', {
+    id: { $in: bulkIds },
+    category,
   });
+  const pkgById = new Map(packages.map((p) => [p.id, p]));
+
+  return sessions
+    .filter((session) => pkgById.has(session.bulk_id))
+    .map((session) => {
+      const pkg = pkgById.get(session.bulk_id);
+      return category === 'gym'
+        ? sessionToGymRow(session, pkg)
+        : sessionToTurfRow(session, pkg);
+    });
 }
 
-export function queryBulkPaymentsForDate(date, category) {
-  const packages = db.prepare(`
-    SELECT * FROM bulk_packages
-    WHERE category = ? AND status = 'CLOSED'
-    AND (
-      (advance_date = ? AND (advance_gpay > 0 OR advance_cash > 0))
-      OR (balance_date = ? AND (balance_gpay > 0 OR balance_cash > 0))
-    )
-    ORDER BY id ASC
-  `).all(category, date, date);
-
-  return packages.map((pkg) =>
-    category === 'gym' ? packageToGymPaymentRow(pkg) : packageToTurfPaymentRow(pkg)
+async function mapPaymentPackages(packages, category) {
+  return Promise.all(
+    packages.map((pkg) =>
+      category === 'gym' ? packageToGymPaymentRow(pkg) : packageToTurfPaymentRow(pkg),
+    ),
   );
 }
 
-export function queryBulkPaymentsInRange(from, to, category) {
-  const packages = db.prepare(`
-    SELECT * FROM bulk_packages
-    WHERE category = ? AND status = 'CLOSED'
-    AND (
-      (advance_date BETWEEN ? AND ? AND (advance_gpay > 0 OR advance_cash > 0))
-      OR (balance_date BETWEEN ? AND ? AND (balance_gpay > 0 OR balance_cash > 0))
-    )
-    ORDER BY id ASC
-  `).all(category, from, to, from, to);
-
-  return packages.map((pkg) =>
-    category === 'gym' ? packageToGymPaymentRow(pkg) : packageToTurfPaymentRow(pkg)
-  );
-}
-
-export function queryBulkSessionsInRange(from, to, category) {
-  const rows = db.prepare(`
-    SELECT s.*, p.category, p.name AS pkg_name, p.sport, p.plan_months, p.id AS pkg_id, p.status AS pkg_status,
-      p.total_amount, p.advance_gpay, p.advance_cash, p.advance_date,
-      p.balance_gpay, p.balance_cash, p.balance_date
-    FROM bulk_sessions s
-    JOIN bulk_packages p ON p.id = s.bulk_id
-    WHERE s.session_date BETWEEN ? AND ? AND p.category = ?
-    ORDER BY s.session_date ASC, s.id ASC
-  `).all(from, to, category);
-
-  return rows.map((row) => {
-    const pkg = pkgFromSessionRow(row);
-    const session = {
-      id: row.id,
-      bulk_id: row.bulk_id,
-      session_date: row.session_date,
-      time_slot: row.time_slot,
-      hours: row.hours,
-      remarks: row.remarks,
-    };
-    return category === 'gym'
-      ? sessionToGymRow(session, pkg)
-      : sessionToTurfRow(session, pkg);
+export async function queryBulkSessionsForDate(date, category) {
+  const sessions = await findMany('bulk_sessions', { session_date: date }, {
+    sort: { id: 1 },
   });
+  return mapSessionsWithPackages(sessions, category);
 }
 
-export function queryBulkSessionsForSummary(from, to) {
-  return db.prepare(`
-    SELECT s.session_date, s.time_slot, s.hours, p.sport, p.category
-    FROM bulk_sessions s
-    JOIN bulk_packages p ON p.id = s.bulk_id
-    WHERE s.session_date BETWEEN ? AND ? AND p.category IN ('turf', 'online')
-    ORDER BY s.session_date ASC
-  `).all(from, to);
+export async function queryBulkPaymentsForDate(date, category) {
+  const packages = await findMany('bulk_packages', {
+    category,
+    status: 'CLOSED',
+    ...paymentDateFilter(null, null, date),
+  }, { sort: { id: 1 } });
+  return mapPaymentPackages(packages, category);
+}
+
+export async function queryBulkPaymentsInRange(from, to, category) {
+  const packages = await findMany('bulk_packages', {
+    category,
+    status: 'CLOSED',
+    ...paymentDateFilter(from, to, null),
+  }, { sort: { id: 1 } });
+  return mapPaymentPackages(packages, category);
+}
+
+export async function queryBulkSessionsInRange(from, to, category) {
+  const sessions = await findMany('bulk_sessions', {
+    session_date: { $gte: from, $lte: to },
+  }, { sort: { session_date: 1, id: 1 } });
+  return mapSessionsWithPackages(sessions, category);
+}
+
+export async function queryBulkSessionsForSummary(from, to) {
+  const sessions = await findMany('bulk_sessions', {
+    session_date: { $gte: from, $lte: to },
+  }, { sort: { session_date: 1 } });
+  if (!sessions.length) return [];
+
+  const bulkIds = [...new Set(sessions.map((s) => s.bulk_id))];
+  const packages = await findMany('bulk_packages', {
+    id: { $in: bulkIds },
+    category: { $in: ['turf', 'online'] },
+  });
+  const pkgById = new Map(packages.map((p) => [p.id, p]));
+
+  return sessions
+    .filter((s) => pkgById.has(s.bulk_id))
+    .map((s) => {
+      const pkg = pkgById.get(s.bulk_id);
+      return {
+        session_date: s.session_date,
+        time_slot: s.time_slot,
+        hours: s.hours,
+        sport: pkg.sport,
+        category: pkg.category,
+      };
+    });
 }
 
 export function calcSessionHours(timeSlot) {

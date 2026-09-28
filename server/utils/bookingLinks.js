@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import db from '../db.js';
+import { findOne, findMany, updateOne } from '../db/collections.js';
 
 export function newLinkGroupId() {
   return crypto.randomUUID();
@@ -9,13 +9,12 @@ export function newLinkGroupId() {
  * Resolve link_group_id when saving a turf booking.
  * Body may include link_booking_id (existing booking to pair with today).
  */
-export function resolveBookingLinkGroup(body, existing = null) {
+export async function resolveBookingLinkGroup(body, existing = null) {
   const linkBookingId = body.link_booking_id != null && body.link_booking_id !== ''
     ? Number(body.link_booking_id)
     : null;
 
   if (!linkBookingId) {
-    // Explicit clear when editing and no link selected
     if (body.link_booking_id === '' || body.link_booking_id === null) {
       return null;
     }
@@ -23,7 +22,7 @@ export function resolveBookingLinkGroup(body, existing = null) {
     return existing?.link_group_id || null;
   }
 
-  const partner = db.prepare('SELECT * FROM bookings WHERE id = ?').get(linkBookingId);
+  const partner = await findOne('bookings', { id: linkBookingId });
   if (!partner) {
     const err = new Error('Linked booking not found');
     err.status = 400;
@@ -33,14 +32,14 @@ export function resolveBookingLinkGroup(body, existing = null) {
   const groupId = partner.link_group_id || existing?.link_group_id || newLinkGroupId();
 
   if (!partner.link_group_id) {
-    db.prepare('UPDATE bookings SET link_group_id = ? WHERE id = ?').run(groupId, partner.id);
+    await updateOne('bookings', { id: partner.id }, { link_group_id: groupId });
   }
 
   return groupId;
 }
 
 /** Merge in other bookings that share a link_group_id (so empty linked rows still show). */
-export function appendLinkedTurfBookings(rows, { match_date, from, to } = {}) {
+export async function appendLinkedTurfBookings(rows, { match_date, from, to } = {}) {
   const groups = [...new Set(
     rows
       .map((r) => r.link_group_id)
@@ -49,19 +48,14 @@ export function appendLinkedTurfBookings(rows, { match_date, from, to } = {}) {
   if (!groups.length) return rows;
 
   const byId = new Map(rows.map((r) => [r.id, r]));
-  const placeholders = groups.map(() => '?').join(',');
-  let sql = `SELECT * FROM bookings WHERE link_group_id IN (${placeholders})`;
-  const params = [...groups];
-
+  const filter = { link_group_id: { $in: groups } };
   if (match_date) {
-    sql += ' AND match_date = ?';
-    params.push(match_date);
+    filter.match_date = match_date;
   } else if (from && to) {
-    sql += ' AND match_date BETWEEN ? AND ?';
-    params.push(from, to);
+    filter.match_date = { $gte: from, $lte: to };
   }
 
-  for (const row of db.prepare(sql).all(...params)) {
+  for (const row of await findMany('bookings', filter)) {
     if (!byId.has(row.id)) byId.set(row.id, row);
   }
 

@@ -1,3 +1,8 @@
+/**
+ * LEGACY: SQLite schema file. The live API no longer imports this module.
+ * Kept so local `data.db` still opens for `npm run migrate:mongo` and ad-hoc reads.
+ * Runtime storage is MongoDB Atlas (see db/mongo.js, db/collections.js).
+ */
 import Database from 'better-sqlite3';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -177,6 +182,12 @@ if (gymCols.includes('gym_date')) {
     ALTER TABLE gym_entries_migrated RENAME TO gym_entries;
   `);
   console.log('Gym table migrated to start_date / end_date schema');
+}
+
+const gymLinkCols = db.prepare('PRAGMA table_info(gym_entries)').all().map((c) => c.name);
+if (!gymLinkCols.includes('link_group_id')) {
+  db.exec('ALTER TABLE gym_entries ADD COLUMN link_group_id TEXT');
+  console.log('Added link_group_id to gym_entries');
 }
 
 const onlineCols = db.prepare('PRAGMA table_info(online_bookings)').all().map((c) => c.name);

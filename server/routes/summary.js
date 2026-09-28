@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import db from '../db.js';
+import { findMany } from '../db/collections.js';
 import { slotHours, bookingPayment, gymPayment } from '../utils/time.js';
 import { getRange, eachDay, dayLabel, weekBuckets } from '../utils/summaryDates.js';
 import { queryBulkSessionsForSummary } from '../utils/bulk.js';
@@ -9,6 +9,7 @@ import {
   queryOnlineSettlementRows,
 } from '../utils/onlinePayments.js';
 import { SPORTS, sportLabel } from '../utils/sports.js';
+import { buildMonthlyHubBreakdown } from '../utils/monthlyHub.js';
 
 const router = Router();
 const PLANS = [1, 3, 6];
@@ -85,7 +86,7 @@ function initGymPlans() {
   return Object.fromEntries(PLANS.map((p) => [p, { count: 0, payment: 0 }]));
 }
 
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   const period = req.query.period || 'weekly';
   const date = req.query.date || new Date().toISOString().split('T')[0];
 
@@ -94,13 +95,19 @@ router.get('/', (req, res) => {
   }
 
   const range = getRange(period, date);
-  const turfRows = db.prepare('SELECT * FROM bookings WHERE match_date BETWEEN ? AND ?').all(range.from, range.to);
-  const onlineRows = db.prepare('SELECT * FROM online_bookings WHERE match_date BETWEEN ? AND ?').all(range.from, range.to);
+  const turfRows = await findMany('bookings', {
+    match_date: { $gte: range.from, $lte: range.to },
+  });
+  const onlineRows = await findMany('online_bookings', {
+    match_date: { $gte: range.from, $lte: range.to },
+  });
   const onlineReceiptRows = [
-    ...queryOnlineDirectReceivedRows({ from: range.from, to: range.to }),
-    ...queryOnlineSettlementRows({ from: range.from, to: range.to }),
+    ...await queryOnlineDirectReceivedRows({ from: range.from, to: range.to }),
+    ...await queryOnlineSettlementRows({ from: range.from, to: range.to }),
   ];
-  const gymRows = db.prepare('SELECT * FROM gym_entries WHERE start_date BETWEEN ? AND ?').all(range.from, range.to);
+  const gymRows = await findMany('gym_entries', {
+    start_date: { $gte: range.from, $lte: range.to },
+  });
 
   const turf = initSports();
   for (const row of turfRows) {
@@ -115,7 +122,7 @@ router.get('/', (req, res) => {
     addSportPayment(turf, row.sport, onlineReceiptInDays(row, eachDay(range.from, range.to)));
   }
 
-  const bulkSessions = queryBulkSessionsForSummary(range.from, range.to);
+  const bulkSessions = await queryBulkSessionsForSummary(range.from, range.to);
   for (const row of bulkSessions) {
     const hours = row.hours || slotHours(row.time_slot);
     addSport(turf, row.sport || 'cricket', hours, 0);
@@ -134,7 +141,7 @@ router.get('/', (req, res) => {
     gym.admissions += members;
   }
 
-  const chart = buildChart(period, range, turfRows, onlineRows, onlineReceiptRows, gymRows);
+  const chart = buildChart(period, range, turfRows, onlineRows, onlineReceiptRows, gymRows, bulkSessions);
   const onlineReceived = onlineReceiptRows.reduce(
     (sum, row) => sum + onlineReceiptInDays(row, eachDay(range.from, range.to)),
     0,
@@ -150,7 +157,7 @@ router.get('/', (req, res) => {
   });
 });
 
-function buildChart(period, range, turfRows, onlineRows, onlineReceiptRows, gymRows) {
+function buildChart(period, range, turfRows, onlineRows, onlineReceiptRows, gymRows, bulkSessions) {
   if (period === 'daily') {
     const turfDay = initSports();
     for (const row of turfRows) {
@@ -162,12 +169,7 @@ function buildChart(period, range, turfRows, onlineRows, onlineReceiptRows, gymR
     for (const row of onlineReceiptRows) {
       addSportPayment(turfDay, row.sport, onlineReceiptOnDate(row, range.from));
     }
-    const bulkDay = db.prepare(`
-      SELECT s.session_date, s.time_slot, s.hours, p.sport
-      FROM bulk_sessions s
-      JOIN bulk_packages p ON p.id = s.bulk_id
-      WHERE s.session_date = ? AND p.category IN ('turf', 'online')
-    `).all(range.from);
+    const bulkDay = (bulkSessions || []).filter((row) => row.session_date === range.from);
     for (const row of bulkDay) {
       addSport(turfDay, row.sport || 'cricket', row.hours || slotHours(row.time_slot), 0);
     }
@@ -220,13 +222,7 @@ function buildChart(period, range, turfRows, onlineRows, onlineReceiptRows, gymR
     for (const row of onlineReceiptRows) {
       pt.payment += onlineReceiptInDays(row, b.days);
     }
-    const bulkInBucket = db.prepare(`
-      SELECT s.session_date, s.time_slot, s.hours, p.sport
-      FROM bulk_sessions s
-      JOIN bulk_packages p ON p.id = s.bulk_id
-      WHERE s.session_date BETWEEN ? AND ? AND p.category IN ('turf', 'online')
-    `).all(b.days[0], b.days[b.days.length - 1]);
-    for (const row of bulkInBucket) {
+    for (const row of bulkSessions || []) {
       if (b.days.includes(row.session_date)) {
         const sport = row.sport || 'cricket';
         if (pt[sport] == null) pt[sport] = 0;
@@ -247,5 +243,14 @@ function buildChart(period, range, turfRows, onlineRows, onlineReceiptRows, gymR
 
   return { type: period, points };
 }
+
+router.get('/monthly-hub', async (req, res) => {
+  const month = req.query.month || new Date().toISOString().slice(0, 7);
+  try {
+    res.json(await buildMonthlyHubBreakdown(month));
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
 
 export default router;

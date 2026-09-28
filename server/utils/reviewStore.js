@@ -1,8 +1,9 @@
-import db from '../db.js';
+import { findMany, findOne, insertOne, updateOne } from '../db/collections.js';
+import { syncReviewToMongo } from '../db/mongo.js';
 
 export function reviewToSnapshot(row) {
   return {
-    review_id: row.id,
+    review_id: row.id ?? row.review_id,
     customer_name: row.customer_name || '',
     happiness: row.happiness,
     comment: row.comment,
@@ -11,41 +12,38 @@ export function reviewToSnapshot(row) {
   };
 }
 
-export function createReview({ customer_name, happiness, comment }) {
-  const stmt = db.prepare(`
-    INSERT INTO customer_reviews (customer_name, happiness, comment)
-    VALUES (?, ?, ?)
-  `);
-  const result = stmt.run(
-    (customer_name || '').trim(),
+export async function createReview({ customer_name, happiness, comment }) {
+  const row = await insertOne('customer_reviews', {
+    customer_name: (customer_name || '').trim(),
     happiness,
-    (comment || '').trim(),
-  );
-  return getReviewById(result.lastInsertRowid);
+    comment: (comment || '').trim(),
+    read_by_owner: false,
+    created_at: new Date().toISOString(),
+  });
+  const snapshot = reviewToSnapshot(row);
+  await syncReviewToMongo({ ...snapshot, review_id: row.id });
+  return row;
 }
 
-export function getReviewById(id) {
-  return db.prepare('SELECT * FROM customer_reviews WHERE id = ?').get(id);
+export async function getReviewById(id) {
+  return findOne('customer_reviews', { id: Number(id) });
 }
 
-export function getLatestUnreadReview() {
-  return db.prepare(`
-    SELECT * FROM customer_reviews
-    WHERE read_by_owner = 0
-    ORDER BY datetime(created_at) DESC, id DESC
-    LIMIT 1
-  `).get();
+export async function getLatestUnreadReview() {
+  const rows = await findMany('customer_reviews', { read_by_owner: { $ne: true } }, {
+    sort: { created_at: -1, id: -1 },
+    limit: 1,
+  });
+  return rows[0] || null;
 }
 
-export function markReviewRead(id) {
-  db.prepare('UPDATE customer_reviews SET read_by_owner = 1 WHERE id = ?').run(id);
-  return getReviewById(id);
+export async function markReviewRead(id) {
+  return updateOne('customer_reviews', { id: Number(id) }, { read_by_owner: true });
 }
 
-export function listAllReviews(limit = 50) {
-  return db.prepare(`
-    SELECT * FROM customer_reviews
-    ORDER BY datetime(created_at) DESC, id DESC
-    LIMIT ?
-  `).all(limit);
+export async function listAllReviews(limit = 50) {
+  return findMany('customer_reviews', {}, {
+    sort: { created_at: -1, id: -1 },
+    limit,
+  });
 }

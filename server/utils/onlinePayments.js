@@ -1,4 +1,4 @@
-import db from '../db.js';
+import { findMany, findOne } from '../db/collections.js';
 
 export const ONLINE_PAYMENT_METHODS = ['DIRECT_GPAY', 'MPAY', 'ONLINE_PAY'];
 export const DEFERRED_ONLINE_METHODS = ['MPAY', 'ONLINE_PAY'];
@@ -60,33 +60,71 @@ function paymentParts(row) {
   ];
 }
 
-export function listOnlineSettlementCandidates({ from, to } = {}) {
-  let sql = 'SELECT * FROM online_bookings WHERE 1=1';
-  const params = [];
-  if (from) {
-    sql += ' AND match_date >= ?';
-    params.push(from);
+async function settlementTotalsByBooking() {
+  const allocated = await findMany('online_settlement_allocations', {});
+  const map = new Map();
+  for (const row of allocated) {
+    const key = `${row.online_booking_id}:${row.payment_stage}`;
+    const existing = map.get(key) || {
+      online_booking_id: row.online_booking_id,
+      payment_stage: row.payment_stage,
+      allocated_expected: 0,
+      allocated_received: 0,
+      allocated_commission: 0,
+    };
+    existing.allocated_expected += Number(row.expected_amount) || 0;
+    existing.allocated_received += Number(row.received_amount) || 0;
+    existing.allocated_commission += Number(row.commission_amount) || 0;
+    map.set(key, existing);
   }
-  if (to) {
-    sql += ' AND match_date <= ?';
-    params.push(to);
-  }
-  sql += ' ORDER BY match_date ASC, id ASC';
+  return map;
+}
 
-  const rows = db.prepare(sql).all(...params);
-  const allocated = db.prepare(`
-    SELECT online_booking_id, payment_stage,
-      COALESCE(SUM(expected_amount), 0) AS allocated_expected,
-      COALESCE(SUM(received_amount), 0) AS allocated_received
-    FROM online_settlement_allocations
-    GROUP BY online_booking_id, payment_stage
-  `).all();
-  const byPart = new Map(
-    allocated.map((row) => [
-      `${row.online_booking_id}:${row.payment_stage}`,
-      row,
-    ]),
-  );
+function matchDateFilter({ from, to } = {}) {
+  const filter = {};
+  if (from || to) {
+    filter.match_date = {};
+    if (from) filter.match_date.$gte = from;
+    if (to) filter.match_date.$lte = to;
+  }
+  return filter;
+}
+
+function creditDateFilter({ from, to, date } = {}) {
+  if (date) return { credit_date: date };
+  const filter = {};
+  if (from || to) {
+    filter.credit_date = {};
+    if (from) filter.credit_date.$gte = from;
+    if (to) filter.credit_date.$lte = to;
+  }
+  return filter;
+}
+
+function dateInRange(value, { from, to, date } = {}) {
+  if (!value) return false;
+  if (date) return value === date;
+  if (from && to) return value >= from && value <= to;
+  return true;
+}
+
+function isDirectAdvancePart(row) {
+  const method = normalizeOnlinePaymentMethod(row.advance_method);
+  return (method === 'DIRECT_GPAY' && (Number(row.advance_gpay) || 0) > 0)
+    || (Number(row.advance_cash) || 0) > 0;
+}
+
+function isDirectBalancePart(row) {
+  const method = normalizeOnlinePaymentMethod(row.balance_method);
+  return (method === 'DIRECT_GPAY' && (Number(row.balance_gpay) || 0) > 0)
+    || (Number(row.balance_cash) || 0) > 0;
+}
+
+export async function listOnlineSettlementCandidates({ from, to } = {}) {
+  const rows = await findMany('online_bookings', matchDateFilter({ from, to }), {
+    sort: { match_date: 1, id: 1 },
+  });
+  const byPart = await settlementTotalsByBooking();
 
   const candidates = [];
   for (const row of rows) {
@@ -118,41 +156,55 @@ export function listOnlineSettlementCandidates({ from, to } = {}) {
   return candidates;
 }
 
-export function getOnlineSettlementWithAllocations(id) {
-  const settlement = db.prepare('SELECT * FROM online_settlements WHERE id = ?').get(id);
+export async function getOnlineSettlementWithAllocations(id) {
+  const settlement = await findOne('online_settlements', { id: Number(id) });
   if (!settlement) return null;
-  const allocations = db.prepare(`
-    SELECT a.*, b.name, b.sport, b.match_date, b.time_slot,
-      CASE a.payment_stage
-        WHEN 'advance' THEN COALESCE(b.advance_method, 'DIRECT_GPAY')
-        ELSE COALESCE(b.balance_method, 'DIRECT_GPAY')
-      END AS method,
-      CASE a.payment_stage
-        WHEN 'advance' THEN COALESCE(b.advance_date, b.match_date)
-        ELSE COALESCE(b.balance_date, b.match_date)
-      END AS payment_date,
-      CASE a.payment_stage
-        WHEN 'advance' THEN COALESCE(b.advance_gpay, 0) + COALESCE(b.advance_cash, 0)
-        ELSE COALESCE(b.balance_gpay, 0) + COALESCE(b.balance_cash, 0)
-      END AS payment_amount,
-      CASE a.payment_stage
-        WHEN 'advance' THEN COALESCE(
-          b.advance_expected_credit_date,
-          date(COALESCE(b.advance_date, b.match_date), '+2 day')
-        )
-        ELSE COALESCE(
-          b.balance_expected_credit_date,
-          date(COALESCE(b.balance_date, b.match_date), '+2 day')
-        )
-      END AS expected_credit_date
-    FROM online_settlement_allocations a
-    JOIN online_bookings b ON b.id = a.online_booking_id
-    WHERE a.settlement_id = ?
-    ORDER BY b.match_date ASC, b.id ASC, a.payment_stage ASC
-  `).all(id);
+
+  const allocations = await findMany('online_settlement_allocations', {
+    settlement_id: Number(id),
+  });
+  const bookingIds = [...new Set(allocations.map((row) => row.online_booking_id))];
+  const bookings = bookingIds.length
+    ? await findMany('online_bookings', { id: { $in: bookingIds } })
+    : [];
+  const byBooking = new Map(bookings.map((row) => [row.id, row]));
+
+  const joined = allocations.map((row) => {
+    const booking = byBooking.get(row.online_booking_id) || {};
+    const isAdvance = row.payment_stage === 'advance';
+    const method = normalizeOnlinePaymentMethod(
+      isAdvance ? booking.advance_method : booking.balance_method,
+    );
+    const paymentDate = isAdvance
+      ? (booking.advance_date || booking.match_date)
+      : (booking.balance_date || booking.match_date);
+    const paymentAmount = isAdvance
+      ? (Number(booking.advance_gpay) || 0) + (Number(booking.advance_cash) || 0)
+      : (Number(booking.balance_gpay) || 0) + (Number(booking.balance_cash) || 0);
+    const storedExpected = isAdvance
+      ? booking.advance_expected_credit_date
+      : booking.balance_expected_credit_date;
+
+    return {
+      ...row,
+      name: booking.name,
+      sport: booking.sport,
+      match_date: booking.match_date,
+      time_slot: booking.time_slot,
+      method,
+      payment_date: paymentDate,
+      payment_amount: paymentAmount,
+      expected_credit_date: storedExpected || expectedOnlineCreditDate(paymentDate, method),
+    };
+  }).sort((a, b) => (
+    String(a.match_date || '').localeCompare(String(b.match_date || ''))
+    || (a.online_booking_id - b.online_booking_id)
+    || String(a.payment_stage || '').localeCompare(String(b.payment_stage || ''))
+  ));
+
   return {
     ...settlement,
-    allocations: allocations.map((row) => ({
+    allocations: joined.map((row) => ({
       ...row,
       expected_amount: Number(row.expected_amount) || 0,
       received_amount: Number(row.received_amount) || 0,
@@ -162,33 +214,11 @@ export function getOnlineSettlementWithAllocations(id) {
   };
 }
 
-export function listOnlineSettlements({ from, to } = {}) {
-  let sql = 'SELECT * FROM online_settlements WHERE 1=1';
-  const params = [];
-  if (from) {
-    sql += ' AND credit_date >= ?';
-    params.push(from);
-  }
-  if (to) {
-    sql += ' AND credit_date <= ?';
-    params.push(to);
-  }
-  sql += ' ORDER BY credit_date DESC, id DESC';
-  return db.prepare(sql).all(...params).map((row) => getOnlineSettlementWithAllocations(row.id));
-}
-
-function settlementTotalsByBooking() {
-  const allocated = db.prepare(`
-    SELECT online_booking_id, payment_stage,
-      COALESCE(SUM(expected_amount), 0) AS allocated_expected,
-      COALESCE(SUM(received_amount), 0) AS allocated_received,
-      COALESCE(SUM(commission_amount), 0) AS allocated_commission
-    FROM online_settlement_allocations
-    GROUP BY online_booking_id, payment_stage
-  `).all();
-  return new Map(
-    allocated.map((row) => [`${row.online_booking_id}:${row.payment_stage}`, row]),
-  );
+export async function listOnlineSettlements({ from, to } = {}) {
+  const rows = await findMany('online_settlements', creditDateFilter({ from, to }), {
+    sort: { credit_date: -1, id: -1 },
+  });
+  return Promise.all(rows.map((row) => getOnlineSettlementWithAllocations(row.id)));
 }
 
 /**
@@ -197,19 +227,15 @@ function settlementTotalsByBooking() {
  * - Direct GPay / cash received on this date (enter the sum immediately)
  * - Settlement credits received on this date (enter the sum)
  */
-export function queryOnlineDailyDisplayRows({ date, from, to } = {}) {
-  let matchSql = 'SELECT * FROM online_bookings WHERE 1=1';
-  const matchParams = [];
+export async function queryOnlineDailyDisplayRows({ date, from, to } = {}) {
+  const filter = {};
   if (date) {
-    matchSql += ' AND match_date = ?';
-    matchParams.push(date);
+    filter.match_date = date;
   } else if (from && to) {
-    matchSql += ' AND match_date BETWEEN ? AND ?';
-    matchParams.push(from, to);
+    filter.match_date = { $gte: from, $lte: to };
   }
-  matchSql += ' ORDER BY match_date ASC, id ASC';
 
-  const settled = settlementTotalsByBooking();
+  const settled = await settlementTotalsByBooking();
 
   function annotateMatchRow(raw, reportDate = null) {
     const row = enrichOnlineBooking(raw);
@@ -265,15 +291,19 @@ export function queryOnlineDailyDisplayRows({ date, from, to } = {}) {
     };
   }
 
+  const matchRows = await findMany('online_bookings', filter, {
+    sort: { match_date: 1, id: 1 },
+  });
+
   const byId = new Map();
-  for (const raw of db.prepare(matchSql).all(...matchParams)) {
+  for (const raw of matchRows) {
     byId.set(raw.id, annotateMatchRow(raw, date || null));
   }
 
   // Also include Direct GPay received on this payment date, even if match was another day.
-  for (const direct of queryOnlineDirectReceivedRows({ date, from, to })) {
+  for (const direct of await queryOnlineDirectReceivedRows({ date, from, to })) {
     if (byId.has(direct.id)) continue;
-    const full = db.prepare('SELECT * FROM online_bookings WHERE id = ?').get(direct.id);
+    const full = await findOne('online_bookings', { id: direct.id });
     if (!full) continue;
     byId.set(direct.id, {
       ...annotateMatchRow(full, date || direct.advance_date || direct.balance_date || null),
@@ -281,7 +311,7 @@ export function queryOnlineDailyDisplayRows({ date, from, to } = {}) {
     });
   }
 
-  const settlementRows = queryOnlineSettlementRows({ date, from, to }).map((row) => ({
+  const settlementRows = (await queryOnlineSettlementRows({ date, from, to })).map((row) => ({
     ...row,
     is_online_match_day: false,
     pending_credit_amount: 0,
@@ -296,99 +326,99 @@ export function queryOnlineDailyDisplayRows({ date, from, to } = {}) {
   ];
 }
 
-export function queryOnlineDirectReceivedRows({ from, to, date } = {}) {
-  let sql = 'SELECT * FROM online_bookings WHERE 1=1';
-  const params = [];
-  const directAdvance = `
-    (advance_date %DATE_FILTER%
-      AND (
-        (COALESCE(advance_method, 'DIRECT_GPAY') = 'DIRECT_GPAY' AND advance_gpay > 0)
-        OR advance_cash > 0
-      ))
-  `;
-  const directBalance = `
-    (balance_date %DATE_FILTER%
-      AND (
-        (COALESCE(balance_method, 'DIRECT_GPAY') = 'DIRECT_GPAY' AND balance_gpay > 0)
-        OR balance_cash > 0
-      ))
-  `;
-
+export async function queryOnlineDirectReceivedRows({ from, to, date } = {}) {
+  const range = { from, to, date };
+  const filter = {};
   if (date) {
-    sql += ` AND (${directAdvance.replace('%DATE_FILTER%', '= ?')}
-      OR ${directBalance.replace('%DATE_FILTER%', '= ?')})`;
-    params.push(date, date);
+    filter.$or = [{ advance_date: date }, { balance_date: date }];
   } else if (from && to) {
-    sql += ` AND (${directAdvance.replace('%DATE_FILTER%', 'BETWEEN ? AND ?')}
-      OR ${directBalance.replace('%DATE_FILTER%', 'BETWEEN ? AND ?')})`;
-    params.push(from, to, from, to);
+    filter.$or = [
+      { advance_date: { $gte: from, $lte: to } },
+      { balance_date: { $gte: from, $lte: to } },
+    ];
   }
-  sql += ' ORDER BY match_date ASC, id ASC';
 
-  return db.prepare(sql).all(...params).map((raw) => {
-    const row = enrichOnlineBooking(raw);
-    return {
-      ...row,
-      deferred_advance_gpay: DEFERRED_ONLINE_METHODS.includes(row.advance_method)
-        ? row.advance_gpay
-        : 0,
-      deferred_balance_gpay: DEFERRED_ONLINE_METHODS.includes(row.balance_method)
-        ? row.balance_gpay
-        : 0,
-      advance_gpay: row.advance_method === 'DIRECT_GPAY' ? row.advance_gpay : 0,
-      balance_gpay: row.balance_method === 'DIRECT_GPAY' ? row.balance_gpay : 0,
-      payment_method: 'DIRECT_GPAY',
-    };
+  const rows = await findMany('online_bookings', filter, {
+    sort: { match_date: 1, id: 1 },
   });
+
+  return rows
+    .filter((raw) => (
+      (isDirectAdvancePart(raw) && dateInRange(raw.advance_date, range))
+      || (isDirectBalancePart(raw) && dateInRange(raw.balance_date, range))
+    ))
+    .map((raw) => {
+      const row = enrichOnlineBooking(raw);
+      return {
+        ...row,
+        deferred_advance_gpay: DEFERRED_ONLINE_METHODS.includes(row.advance_method)
+          ? row.advance_gpay
+          : 0,
+        deferred_balance_gpay: DEFERRED_ONLINE_METHODS.includes(row.balance_method)
+          ? row.balance_gpay
+          : 0,
+        advance_gpay: row.advance_method === 'DIRECT_GPAY' ? row.advance_gpay : 0,
+        balance_gpay: row.balance_method === 'DIRECT_GPAY' ? row.balance_gpay : 0,
+        payment_method: 'DIRECT_GPAY',
+      };
+    });
 }
 
-export function queryOnlineSettlementRows({ from, to, date } = {}) {
-  let sql = `
-    SELECT
-      a.id AS allocation_id,
-      s.id AS settlement_id,
-      s.credit_date,
-      s.source,
-      s.reference,
-      a.payment_stage,
-      a.expected_amount,
-      a.received_amount,
-      a.commission_amount,
-      b.id AS online_booking_id,
-      b.*
-    FROM online_settlement_allocations a
-    JOIN online_settlements s ON s.id = a.settlement_id
-    JOIN online_bookings b ON b.id = a.online_booking_id
-    WHERE 1=1
-  `;
-  const params = [];
-  if (date) {
-    sql += ' AND s.credit_date = ?';
-    params.push(date);
-  } else {
-    if (from) {
-      sql += ' AND s.credit_date >= ?';
-      params.push(from);
-    }
-    if (to) {
-      sql += ' AND s.credit_date <= ?';
-      params.push(to);
-    }
-  }
-  sql += ' ORDER BY s.credit_date ASC, s.id ASC, b.match_date ASC, b.id ASC';
+export async function queryOnlineSettlementRows({ from, to, date } = {}) {
+  const settlements = await findMany('online_settlements', creditDateFilter({ from, to, date }), {
+    sort: { credit_date: 1, id: 1 },
+  });
+  if (!settlements.length) return [];
 
-  return db.prepare(sql).all(...params).map((row) => ({
-    ...row,
-    id: `online-settlement-${row.allocation_id}`,
-    is_online_settlement: true,
-    total: row.expected_amount,
-    advance_gpay: row.received_amount,
-    advance_cash: 0,
-    advance_date: row.credit_date,
-    balance_gpay: 0,
-    balance_cash: 0,
-    balance_date: null,
-    payment_method: row.source,
-    settlement_reference: row.reference,
-  }));
+  const settlementIds = settlements.map((row) => row.id);
+  const settlementById = new Map(settlements.map((row) => [row.id, row]));
+  const allocations = await findMany('online_settlement_allocations', {
+    settlement_id: { $in: settlementIds },
+  });
+  if (!allocations.length) return [];
+
+  const bookingIds = [...new Set(allocations.map((row) => row.online_booking_id))];
+  const bookings = await findMany('online_bookings', { id: { $in: bookingIds } });
+  const bookingById = new Map(bookings.map((row) => [row.id, row]));
+
+  return allocations
+    .map((allocation) => {
+      const settlement = settlementById.get(allocation.settlement_id);
+      const booking = bookingById.get(allocation.online_booking_id);
+      if (!settlement || !booking) return null;
+      return {
+        ...booking,
+        allocation_id: allocation.id,
+        settlement_id: settlement.id,
+        credit_date: settlement.credit_date,
+        source: settlement.source,
+        reference: settlement.reference,
+        payment_stage: allocation.payment_stage,
+        expected_amount: allocation.expected_amount,
+        received_amount: allocation.received_amount,
+        commission_amount: allocation.commission_amount,
+        online_booking_id: booking.id,
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => (
+      String(a.credit_date || '').localeCompare(String(b.credit_date || ''))
+      || (a.settlement_id - b.settlement_id)
+      || String(a.match_date || '').localeCompare(String(b.match_date || ''))
+      || (a.online_booking_id - b.online_booking_id)
+    ))
+    .map((row) => ({
+      ...row,
+      id: `online-settlement-${row.allocation_id}`,
+      is_online_settlement: true,
+      total: row.expected_amount,
+      advance_gpay: row.received_amount,
+      advance_cash: 0,
+      advance_date: row.credit_date,
+      balance_gpay: 0,
+      balance_cash: 0,
+      balance_date: null,
+      payment_method: row.source,
+      settlement_reference: row.reference,
+    }));
 }

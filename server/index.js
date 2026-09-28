@@ -37,6 +37,7 @@ app.get('/api/health', (_req, res) => {
     ok: true,
     mongo: isMongoReady(),
     mongo_error: isMongoReady() ? null : getMongoError(),
+    db: 'mongodb',
     env: isProd ? 'production' : 'development',
   });
 });
@@ -74,12 +75,16 @@ if (isProd) {
   });
 }
 
-connectMongo().catch((err) => {
-  console.error('MongoDB background connect failed:', err.message);
-});
+connectMongo()
+  .then((db) => {
+    if (!db && isProd) {
+      console.error('FATAL: MongoDB required in production but connection failed:', getMongoError());
+    }
+  })
+  .catch((err) => {
+    console.error('MongoDB background connect failed:', err.message);
+  });
 
-// Safety net: a single failed request (e.g. Mongo/cloud error) must never
-// crash the whole server and take every other feature offline.
 process.on('unhandledRejection', (reason) => {
   console.error('Unhandled promise rejection:', reason?.message || reason);
 });
@@ -94,15 +99,14 @@ app.listen(PORT, '0.0.0.0', () => {
     console.log('Trainer mobile app:', `http://localhost:${PORT}/trainer`);
   }
   if (!isProd) {
-    try {
-      const result = runBackups();
-      if (result.daily || result.weekly) {
-        console.log('Backup folder:', 'server/backups/');
-      } else {
-        console.log('Backups up to date for today');
-      }
-    } catch (err) {
-      console.error('Startup backup failed:', err.message);
-    }
+    runBackups()
+      .then((result) => {
+        if (result.daily || result.weekly) {
+          console.log('Backup folder:', 'server/backups/');
+        } else if (!result.skipped) {
+          console.log('Backups up to date for today');
+        }
+      })
+      .catch((err) => console.error('Startup backup failed:', err.message));
   }
 });

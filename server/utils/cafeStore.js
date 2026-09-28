@@ -1,10 +1,13 @@
-import db from '../db.js';
+import { findMany, findOne, replaceOne } from '../db/collections.js';
 import { formatMonthLabel } from './cafeCsv.js';
 
 export function cafeRowToReport(row) {
   if (!row) return null;
-  const data = typeof row.data === 'string' ? JSON.parse(row.data) : (row.data || {});
+  const nested = typeof row.data === 'string' ? JSON.parse(row.data) : (row.data || {});
+  const { data: _data, ...rest } = row;
   return {
+    ...rest,
+    ...nested,
     month_key: row.month_key,
     label: formatMonthLabel(row.month_key),
     period_from: row.period_from,
@@ -14,25 +17,41 @@ export function cafeRowToReport(row) {
     uploaded_at: row.uploaded_at,
     grand_qty: row.grand_qty,
     grand_total: row.grand_total,
-    ...data,
   };
 }
 
-export function listCafeMonthsFromSqlite() {
-  const rows = db.prepare(`
-    SELECT month_key, period_from, period_to, business_name, grand_qty, grand_total, source_filename, uploaded_at
-    FROM cafe_reports
-    ORDER BY month_key DESC
-  `).all();
+export async function listCafeMonthsFromSqlite() {
+  const rows = await findMany('cafe_reports', {}, {
+    sort: { month_key: -1 },
+    projection: {
+      month_key: 1,
+      period_from: 1,
+      period_to: 1,
+      business_name: 1,
+      grand_qty: 1,
+      grand_total: 1,
+      source_filename: 1,
+      uploaded_at: 1,
+    },
+  });
   return rows.map((r) => ({
     ...r,
     label: formatMonthLabel(r.month_key),
   }));
 }
 
-export function getCafeReportFromSqlite(monthKey) {
-  const row = db.prepare('SELECT * FROM cafe_reports WHERE month_key = ?').get(monthKey);
+export async function getCafeReportFromSqlite(monthKey) {
+  const row = await findOne('cafe_reports', { month_key: monthKey });
   return cafeRowToReport(row);
+}
+
+export async function saveCafeReport(snapshot) {
+  return replaceOne(
+    'cafe_reports',
+    { month_key: snapshot.month_key },
+    snapshot,
+    { upsert: true },
+  );
 }
 
 export function buildCafeSnapshot(parsed) {

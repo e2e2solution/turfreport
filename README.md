@@ -35,5 +35,5 @@ The UI is mobile-first with a bottom navigation bar. Open the app URL on your ph
 
 - **Frontend:** React + Vite
 - **Backend:** Node.js + Express
-- **Database:** SQLite (file-based, no setup needed)
+- **Database:** MongoDB Atlas (`vsh_app`)
 - **Report:** ExcelJS for `.xlsx` export

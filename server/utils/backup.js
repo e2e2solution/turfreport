@@ -1,7 +1,8 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import db, { dbPath } from '../db.js';
+import { COLLECTIONS, findMany, requireDb } from '../db/collections.js';
+import { isMongoReady } from '../db/mongo.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const BACKUP_ROOT = path.join(__dirname, '..', 'backups');
@@ -11,6 +12,8 @@ const STATE_FILE = path.join(BACKUP_ROOT, '.backup-state.json');
 
 const DAILY_KEEP = 30;
 const WEEKLY_KEEP = 12;
+
+const DUMP_COLLECTIONS = COLLECTIONS.filter((c) => c !== 'counters');
 
 function todayISO() {
   return new Date().toISOString().split('T')[0];
@@ -45,14 +48,23 @@ function writeState(state) {
   fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2));
 }
 
-function copyDatabase(destPath) {
-  db.backup(destPath);
+async function exportMongoDump(destPath) {
+  await requireDb();
+  const dump = {
+    exported_at: new Date().toISOString(),
+    collections: {},
+  };
+  for (const name of DUMP_COLLECTIONS) {
+    dump.collections[name] = await findMany(name, {});
+  }
+  fs.writeFileSync(destPath, JSON.stringify(dump, null, 2));
+  return destPath;
 }
 
-function pruneDir(dir, keep) {
+function pruneDir(dir, keep, ext = '.json') {
   if (!fs.existsSync(dir)) return;
   const files = fs.readdirSync(dir)
-    .filter((f) => f.endsWith('.db'))
+    .filter((f) => f.endsWith(ext))
     .map((f) => ({ name: f, time: fs.statSync(path.join(dir, f)).mtimeMs }))
     .sort((a, b) => b.time - a.time);
 
@@ -61,10 +73,10 @@ function pruneDir(dir, keep) {
   }
 }
 
-export function runBackups() {
-  if (!fs.existsSync(dbPath)) {
-    console.log('Backup skipped: database file not found');
-    return { daily: false, weekly: false };
+export async function runBackups() {
+  if (!isMongoReady()) {
+    console.log('Backup skipped: MongoDB not connected');
+    return { daily: false, weekly: false, skipped: true };
   }
 
   ensureDirs();
@@ -74,22 +86,22 @@ export function runBackups() {
   const result = { daily: false, weekly: false, dailyFile: null, weeklyFile: null };
 
   if (state.lastDaily !== today) {
-    const dailyFile = path.join(DAILY_DIR, `data_${today}.db`);
-    copyDatabase(dailyFile);
+    const dailyFile = path.join(DAILY_DIR, `mongo_${today}.json`);
+    await exportMongoDump(dailyFile);
     state.lastDaily = today;
     result.daily = true;
     result.dailyFile = dailyFile;
-    console.log(`Daily backup saved: ${dailyFile}`);
+    console.log(`Daily Mongo dump saved: ${dailyFile}`);
     pruneDir(DAILY_DIR, DAILY_KEEP);
   }
 
   if (state.lastWeekly !== weekKey) {
-    const weeklyFile = path.join(WEEKLY_DIR, `data_week_${weekKey}.db`);
-    copyDatabase(weeklyFile);
+    const weeklyFile = path.join(WEEKLY_DIR, `mongo_week_${weekKey}.json`);
+    await exportMongoDump(weeklyFile);
     state.lastWeekly = weekKey;
     result.weekly = true;
     result.weeklyFile = weeklyFile;
-    console.log(`Weekly backup saved: ${weeklyFile}`);
+    console.log(`Weekly Mongo dump saved: ${weeklyFile}`);
     pruneDir(WEEKLY_DIR, WEEKLY_KEEP);
   }
 
@@ -100,7 +112,10 @@ export function runBackups() {
 export function listBackups() {
   ensureDirs();
   const list = (dir) => fs.existsSync(dir)
-    ? fs.readdirSync(dir).filter((f) => f.endsWith('.db')).sort().reverse()
+    ? fs.readdirSync(dir)
+      .filter((f) => f.endsWith('.json') || f.endsWith('.db'))
+      .sort()
+      .reverse()
     : [];
 
   return {
@@ -112,16 +127,16 @@ export function listBackups() {
 }
 
 let checkedToday = null;
+let backupInFlight = false;
 
 export function backupMiddleware(req, res, next) {
   const today = todayISO();
-  if (checkedToday !== today) {
+  if (checkedToday !== today && !backupInFlight) {
     checkedToday = today;
-    try {
-      runBackups();
-    } catch (err) {
-      console.error('Backup error:', err.message);
-    }
+    backupInFlight = true;
+    runBackups()
+      .catch((err) => console.error('Backup error:', err.message))
+      .finally(() => { backupInFlight = false; });
   }
   next();
 }

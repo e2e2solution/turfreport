@@ -18,7 +18,7 @@ services:
       - key: MONGODB_URI
         sync: false
       - key: MONGODB_DB
-        value: vsh_owner
+        value: vsh_app
       - key: OWNER_PIN
         sync: false
       - key: OWNER_SYNC_KEY

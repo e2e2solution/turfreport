@@ -1,4 +1,4 @@
-import db from '../db.js';
+import { findMany, paymentDateFilter } from '../db/collections.js';
 import {
   queryBulkSessionsForDate,
   queryBulkPaymentsForDate,
@@ -13,44 +13,23 @@ import {
   queryOnlineSettlementRows,
 } from './onlinePayments.js';
 import { appendLinkedTurfBookings, annotateLinkedBookings } from './bookingLinks.js';
+import { annotateGymLinks } from './gymLinks.js';
 
-function filterByMonth(sql, params, dateField, from, to, singleDate) {
-  if (singleDate) {
-    sql += ` AND ${dateField} = ?`;
-    params.push(singleDate.slice(0, 7));
-  } else if (from && to) {
-    sql += ` AND ${dateField} BETWEEN ? AND ?`;
-    params.push(from.slice(0, 7), to.slice(0, 7));
-  }
-  return sql;
+/** @deprecated Prefer paymentDateFilter from db/collections.js */
+export const appendAnyPayment = paymentDateFilter;
+
+function dateFieldFilter(field, from, to, singleDate) {
+  if (singleDate) return { [field]: singleDate };
+  if (from && to) return { [field]: { $gte: from, $lte: to } };
+  return {};
 }
 
-function filterByDate(sql, params, dateField, from, to, singleDate) {
-  if (singleDate) {
-    sql += ` AND ${dateField} = ?`;
-    params.push(singleDate);
-  } else if (from && to) {
-    sql += ` AND ${dateField} BETWEEN ? AND ?`;
-    params.push(from, to);
+function monthFieldFilter(field, from, to, singleDate) {
+  if (singleDate) return { [field]: singleDate.slice(0, 7) };
+  if (from && to) {
+    return { [field]: { $gte: from.slice(0, 7), $lte: to.slice(0, 7) } };
   }
-  return sql;
-}
-
-export function appendAnyPayment(sql, params, from, to, singleDate) {
-  if (singleDate) {
-    sql += ` AND (
-      (advance_date = ? AND (advance_gpay > 0 OR advance_cash > 0))
-      OR (balance_date = ? AND (balance_gpay > 0 OR balance_cash > 0))
-    )`;
-    params.push(singleDate, singleDate);
-  } else if (from && to) {
-    sql += ` AND (
-      (advance_date BETWEEN ? AND ? AND (advance_gpay > 0 OR advance_cash > 0))
-      OR (balance_date BETWEEN ? AND ? AND (balance_gpay > 0 OR balance_cash > 0))
-    )`;
-    params.push(from, to, from, to);
-  }
-  return sql;
+  return {};
 }
 
 /** Drop bulk payment row when a session for the same bulk is already on this report day */
@@ -94,7 +73,7 @@ function finalizeBulkRows(rows, sortFn) {
   return dedupeBulkSessionPaymentsSameDay(sortFn(dedupeBulkPaymentWithSession(rows)));
 }
 
-export function queryReportData({
+export async function queryReportData({
   from,
   to,
   match_date,
@@ -122,30 +101,25 @@ export function queryReportData({
   const wantFootball = section === 'football_coaching' || section === 'all';
 
   if (wantTurf) {
-    let turfSql = 'SELECT * FROM bookings WHERE 1=1';
-    const turfParams = [];
-    if (paymentFilter) {
-      turfSql = appendAnyPayment(turfSql, turfParams, from, to, match_date);
-    } else {
-      turfSql = filterByDate(turfSql, turfParams, 'match_date', from, to, match_date);
-    }
-    turfSql += ' ORDER BY match_date ASC, id ASC';
-    turf = db.prepare(turfSql).all(...turfParams);
+    const turfFilter = paymentFilter
+      ? paymentDateFilter(from, to, match_date)
+      : dateFieldFilter('match_date', from, to, match_date);
+    turf = await findMany('bookings', turfFilter, { sort: { match_date: 1, id: 1 } });
     if (!paymentFilter && match_date) {
-      turf = [...turf, ...queryBulkSessionsForDate(match_date, 'turf')];
+      turf = [...turf, ...(await queryBulkSessionsForDate(match_date, 'turf'))];
     } else if (!paymentFilter && from && to) {
-      turf = [...turf, ...queryBulkSessionsInRange(from, to, 'turf')];
+      turf = [...turf, ...(await queryBulkSessionsInRange(from, to, 'turf'))];
     } else if (paymentFilter) {
       const bulkPay = match_date
-        ? queryBulkPaymentsForDate(match_date, 'turf')
-        : (from && to ? queryBulkPaymentsInRange(from, to, 'turf') : []);
+        ? await queryBulkPaymentsForDate(match_date, 'turf')
+        : (from && to ? await queryBulkPaymentsInRange(from, to, 'turf') : []);
       turf = [...turf, ...bulkPay];
     }
     if (addBulkPending && match_date) {
-      turf = [...turf, ...queryBulkSessionsForDate(match_date, 'turf')];
+      turf = [...turf, ...(await queryBulkSessionsForDate(match_date, 'turf'))];
     }
     // Include linked same-day bookings (e.g. football paid + badminton empty).
-    turf = appendLinkedTurfBookings(turf, { match_date, from, to });
+    turf = await appendLinkedTurfBookings(turf, { match_date, from, to });
     turf = annotateLinkedBookings(turf);
     turf = finalizeBulkRows(turf, sortTurfRows);
   }
@@ -161,64 +135,55 @@ export function queryReportData({
         ...queryOnlineSettlementRows({ from, to, date: match_date }),
       ];
     } else {
-      let onlineSql = 'SELECT * FROM online_bookings WHERE 1=1';
-      const onlineParams = [];
-      onlineSql = filterByDate(onlineSql, onlineParams, 'match_date', from, to, match_date);
-      onlineSql += ' ORDER BY match_date ASC, id ASC';
-      online = db.prepare(onlineSql).all(...onlineParams).map(enrichOnlineBooking);
+      const onlineFilter = dateFieldFilter('match_date', from, to, match_date);
+      online = (await findMany('online_bookings', onlineFilter, {
+        sort: { match_date: 1, id: 1 },
+      })).map(enrichOnlineBooking);
     }
     if (!paymentFilter && match_date) {
-      online = [...online, ...queryBulkSessionsForDate(match_date, 'online')];
+      online = [...online, ...(await queryBulkSessionsForDate(match_date, 'online'))];
     } else if (!paymentFilter && from && to) {
-      online = [...online, ...queryBulkSessionsInRange(from, to, 'online')];
+      online = [...online, ...(await queryBulkSessionsInRange(from, to, 'online'))];
     } else if (paymentFilter && !onlineMatchDay) {
       const bulkPay = match_date
-        ? queryBulkPaymentsForDate(match_date, 'online')
-        : (from && to ? queryBulkPaymentsInRange(from, to, 'online') : []);
+        ? await queryBulkPaymentsForDate(match_date, 'online')
+        : (from && to ? await queryBulkPaymentsInRange(from, to, 'online') : []);
       online = [...online, ...bulkPay];
     }
     if (addBulkPending && match_date) {
-      online = [...online, ...queryBulkSessionsForDate(match_date, 'online')];
+      online = [...online, ...(await queryBulkSessionsForDate(match_date, 'online'))];
     }
     online = finalizeBulkRows(online, sortTurfRows);
   }
 
   if (wantGym) {
-    let gymSql = 'SELECT * FROM gym_entries WHERE 1=1';
-    const gymParams = [];
-    if (paymentFilter) {
-      gymSql = appendAnyPayment(gymSql, gymParams, from, to, match_date);
-    } else {
-      gymSql = filterByDate(gymSql, gymParams, 'start_date', from, to, match_date);
-    }
-    gymSql += ' ORDER BY start_date ASC, id ASC';
-    gym = db.prepare(gymSql).all(...gymParams);
+    const gymFilter = paymentFilter
+      ? paymentDateFilter(from, to, match_date)
+      : dateFieldFilter('start_date', from, to, match_date);
+    gym = await findMany('gym_entries', gymFilter, { sort: { start_date: 1, id: 1 } });
     if (!paymentFilter && match_date) {
-      gym = [...gym, ...queryBulkSessionsForDate(match_date, 'gym')];
+      gym = [...gym, ...(await queryBulkSessionsForDate(match_date, 'gym'))];
     } else if (!paymentFilter && from && to) {
-      gym = [...gym, ...queryBulkSessionsInRange(from, to, 'gym')];
+      gym = [...gym, ...(await queryBulkSessionsInRange(from, to, 'gym'))];
     } else if (paymentFilter) {
       const bulkPay = match_date
-        ? queryBulkPaymentsForDate(match_date, 'gym')
-        : (from && to ? queryBulkPaymentsInRange(from, to, 'gym') : []);
+        ? await queryBulkPaymentsForDate(match_date, 'gym')
+        : (from && to ? await queryBulkPaymentsInRange(from, to, 'gym') : []);
       gym = [...gym, ...bulkPay];
     }
     if (addBulkPending && match_date) {
-      gym = [...gym, ...queryBulkSessionsForDate(match_date, 'gym')];
+      gym = [...gym, ...(await queryBulkSessionsForDate(match_date, 'gym'))];
     }
-    gym = finalizeBulkRows(gym, sortGymRows);
+    gym = annotateGymLinks(finalizeBulkRows(gym, sortGymRows));
   }
 
   if (wantFootball) {
-    let fcSql = 'SELECT * FROM football_coaching WHERE 1=1';
-    const fcParams = [];
-    if (paymentFilter) {
-      fcSql = appendAnyPayment(fcSql, fcParams, from, to, match_date);
-    } else {
-      fcSql = filterByMonth(fcSql, fcParams, 'coaching_month', from, to, match_date);
-    }
-    fcSql += ' ORDER BY coaching_month ASC, id ASC';
-    football_coaching = db.prepare(fcSql).all(...fcParams);
+    const fcFilter = paymentFilter
+      ? paymentDateFilter(from, to, match_date)
+      : monthFieldFilter('coaching_month', from, to, match_date);
+    football_coaching = await findMany('football_coaching', fcFilter, {
+      sort: { coaching_month: 1, id: 1 },
+    });
   }
 
   return { turf, online, gym, football_coaching, paymentFilter, filter_type };

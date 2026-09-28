@@ -1,4 +1,4 @@
-import db from '../db.js';
+import { findMany, nameLikeFilter } from '../db/collections.js';
 import { formatDateDMY } from './excel.js';
 
 function blankToEmpty(value) {
@@ -11,16 +11,13 @@ function money(value) {
   return n ? `₹${n}` : '';
 }
 
-export function searchTurfNameHistory(q, limit = 8) {
+export async function searchTurfNameHistory(q, limit = 8) {
   const query = String(q || '').trim();
   if (query.length < 1) return [];
-  const rows = db.prepare(`
-    SELECT *
-    FROM bookings
-    WHERE LOWER(name) LIKE LOWER(?)
-    ORDER BY id DESC
-    LIMIT ?
-  `).all(`%${query}%`, limit);
+  const rows = await findMany('bookings', nameLikeFilter(query), {
+    sort: { id: -1 },
+    limit,
+  });
 
   return rows.map((row) => ({
     id: row.id,
@@ -46,16 +43,13 @@ export function searchTurfNameHistory(q, limit = 8) {
   }));
 }
 
-export function searchOnlineNameHistory(q, limit = 8) {
+export async function searchOnlineNameHistory(q, limit = 8) {
   const query = String(q || '').trim();
   if (query.length < 1) return [];
-  const rows = db.prepare(`
-    SELECT *
-    FROM online_bookings
-    WHERE LOWER(name) LIKE LOWER(?)
-    ORDER BY id DESC
-    LIMIT ?
-  `).all(`%${query}%`, limit);
+  const rows = await findMany('online_bookings', nameLikeFilter(query), {
+    sort: { id: -1 },
+    limit,
+  });
 
   return rows.map((row) => ({
     id: row.id,
@@ -84,16 +78,13 @@ export function searchOnlineNameHistory(q, limit = 8) {
   }));
 }
 
-export function searchGymNameHistory(q, limit = 8) {
+export async function searchGymNameHistory(q, limit = 8) {
   const query = String(q || '').trim();
   if (query.length < 1) return [];
-  const rows = db.prepare(`
-    SELECT *
-    FROM gym_entries
-    WHERE LOWER(name) LIKE LOWER(?)
-    ORDER BY id DESC
-    LIMIT ?
-  `).all(`%${query}%`, limit);
+  const rows = await findMany('gym_entries', nameLikeFilter(query), {
+    sort: { id: -1 },
+    limit,
+  });
 
   return rows.map((row) => ({
     id: row.id,
@@ -118,18 +109,17 @@ export function searchGymNameHistory(q, limit = 8) {
   }));
 }
 
-export function searchFootballCoachingNameHistory(q, limit = 8) {
+export async function searchFootballCoachingNameHistory(q, limit = 8) {
   const query = String(q || '').trim();
   if (query.length < 1) return [];
-  const rows = db.prepare(`
-    SELECT *
-    FROM football_coaching
-    WHERE LOWER(name) LIKE LOWER(?)
-       OR LOWER(COALESCE(parent_name, '')) LIKE LOWER(?)
-       OR COALESCE(phone, '') LIKE ?
-    ORDER BY id DESC
-    LIMIT ?
-  `).all(`%${query}%`, `%${query}%`, `%${query}%`, limit);
+  const esc = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const rows = await findMany('football_coaching', {
+    $or: [
+      { name: { $regex: esc, $options: 'i' } },
+      { parent_name: { $regex: esc, $options: 'i' } },
+      { phone: { $regex: esc, $options: 'i' } },
+    ],
+  }, { sort: { id: -1 }, limit });
 
   return rows.map((row) => ({
     id: row.id,

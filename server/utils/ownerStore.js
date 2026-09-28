@@ -1,33 +1,19 @@
-import db from '../db.js';
+import { syncReportToMongo, getReportFromMongo, listReportsFromMongo, countReportsFromMongo } from '../db/mongo.js';
 
-export function saveOwnerReport(snapshot) {
-  db.prepare(`
-    INSERT INTO owner_daily_reports (payment_date, data, pushed_at)
-    VALUES (?, ?, ?)
-    ON CONFLICT(payment_date) DO UPDATE SET
-      data = excluded.data,
-      pushed_at = excluded.pushed_at
-  `).run(
-    snapshot.payment_date,
-    JSON.stringify(snapshot),
-    snapshot.pushed_at,
-  );
+export async function saveOwnerReport(snapshot) {
+  const result = await syncReportToMongo(snapshot);
+  if (!result.ok) throw new Error(result.error || 'Failed to save owner report');
+  return snapshot;
 }
 
-export function listOwnerReports(limit = 60) {
-  const rows = db.prepare(`
-    SELECT data FROM owner_daily_reports
-    ORDER BY payment_date DESC
-    LIMIT ?
-  `).all(limit);
-  return rows.map((r) => JSON.parse(r.data));
+export async function listOwnerReports(limit = 60) {
+  return (await listReportsFromMongo(limit)) || [];
 }
 
-export function getOwnerReport(date) {
-  const row = db.prepare('SELECT data FROM owner_daily_reports WHERE payment_date = ?').get(date);
-  return row ? JSON.parse(row.data) : null;
+export async function getOwnerReport(date) {
+  return getReportFromMongo(date);
 }
 
-export function countOwnerReports() {
-  return db.prepare('SELECT COUNT(*) AS n FROM owner_daily_reports').get().n;
+export async function countOwnerReports() {
+  return (await countReportsFromMongo()) || 0;
 }

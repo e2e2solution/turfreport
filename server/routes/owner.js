@@ -3,14 +3,18 @@ import { authMiddleware } from '../middleware/auth.js';
 import {
   verifyOwnerPin, signOwnerToken, ownerAuthMiddleware,
 } from '../middleware/ownerAuth.js';
-import { syncReportToMongo, isMongoReady, getMongoError, syncCafeToMongo, listCafeMonthsFromMongo, getCafeReportFromMongo, syncReviewToMongo, getLatestUnreadReviewFromMongo, markReviewReadInMongo, listReviewsFromMongo, syncPtDraftToMongo, listPtDraftsFromMongo, syncTrainerToMongo } from '../db/mongo.js';
+import {
+  syncReportToMongo, isMongoReady, getMongoError, syncCafeToMongo,
+  listCafeMonthsFromMongo, getCafeReportFromMongo, syncReviewToMongo,
+  getLatestUnreadReviewFromMongo, markReviewReadInMongo, listReviewsFromMongo,
+  syncPtDraftToMongo, listPtDraftsFromMongo, syncTrainerToMongo,
+} from '../db/mongo.js';
 import { buildOwnerReportSnapshot } from '../utils/ownerReport.js';
 import { saveOwnerReport } from '../utils/ownerStore.js';
 import {
   listOwnerReportsAsync, getOwnerReportAsync, countOwnerReportsAsync,
 } from '../utils/ownerStoreAsync.js';
 import { pushReportToCloud } from '../utils/cloudSync.js';
-import { getCafeReportFromSqlite, listCafeMonthsFromSqlite } from '../utils/cafeStore.js';
 import { getLatestUnreadReview, markReviewRead, reviewToSnapshot, listAllReviews } from '../utils/reviewStore.js';
 import { legacyReportToReview, isLegacyReviewReport } from '../utils/reviewLegacy.js';
 
@@ -167,8 +171,8 @@ router.post('/push', authMiddleware, async (req, res) => {
   const { date } = req.body;
   if (!date) return res.status(400).json({ error: 'date (payment date) is required' });
 
-  const snapshot = buildOwnerReportSnapshot(date);
-  saveOwnerReport(snapshot);
+  const snapshot = await buildOwnerReportSnapshot(date);
+  await saveOwnerReport(snapshot);
 
   let mongo = { ok: false };
   let cloud = { ok: false };
@@ -243,7 +247,7 @@ router.get('/cafe/months', ownerAuthMiddleware, async (_req, res) => {
     }));
   if (legacy.length) return res.json(legacy);
 
-  res.json(listCafeMonthsFromSqlite());
+  res.json(mongoRows || []);
 });
 
 router.get('/cafe/report', ownerAuthMiddleware, async (req, res) => {
@@ -256,16 +260,14 @@ router.get('/cafe/report', ownerAuthMiddleware, async (req, res) => {
   const legacy = await getOwnerReportAsync(`cafe-${month}`);
   if (legacy && (legacy.report_type === 'cafe' || legacy.month_key)) return res.json(legacy);
 
-  const report = getCafeReportFromSqlite(month);
-  if (!report) return res.status(404).json({ error: 'No cafe report for this month' });
-  res.json(report);
+  return res.status(404).json({ error: 'No cafe report for this month' });
 });
 
 router.get('/reviews/latest', ownerAuthMiddleware, async (_req, res) => {
   const mongoReview = await getLatestUnreadReviewFromMongo();
   if (mongoReview) return res.json(mongoReview);
 
-  const local = getLatestUnreadReview();
+  const local = await getLatestUnreadReview();
   if (local) return res.json(reviewToSnapshot(local));
 
   res.json(null);
@@ -287,7 +289,8 @@ router.get('/reviews', ownerAuthMiddleware, async (req, res) => {
     ));
   }
 
-  res.json(listAllReviews(limit).map(reviewToSnapshot));
+  const local = await listAllReviews(limit);
+  res.json(local.map(reviewToSnapshot));
 });
 
 router.post('/reviews/:id/read', ownerAuthMiddleware, async (req, res) => {
@@ -295,7 +298,7 @@ router.post('/reviews/:id/read', ownerAuthMiddleware, async (req, res) => {
   if (!reviewId) return res.status(400).json({ error: 'Invalid review id' });
 
   await markReviewReadInMongo(reviewId);
-  markReviewRead(reviewId);
+  await markReviewRead(reviewId);
 
   res.json({ success: true });
 });

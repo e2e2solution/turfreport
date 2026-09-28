@@ -4,7 +4,8 @@
   "type": "module",
   "scripts": {
     "start": "node index.js",
-    "dev": "node --watch index.js"
+    "dev": "node --watch index.js",
+    "migrate:mongo": "node scripts/migrate-sqlite-to-mongo.js"
   },
   "dependencies": {
     "better-sqlite3": "^11.7.0",

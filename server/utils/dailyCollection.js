@@ -1,4 +1,4 @@
-import db from '../db.js';
+import { findMany, paymentDateFilter } from '../db/collections.js';
 import {
   queryOnlineDirectReceivedRows,
   queryOnlineSettlementRows,
@@ -29,9 +29,10 @@ function addBuckets(...buckets) {
   }), emptyBucket());
 }
 
-export function calcDailyCollection(date) {
-  const turfRows = db.prepare('SELECT * FROM bookings').all();
-  const gymRows = db.prepare('SELECT * FROM gym_entries').all();
+export async function calcDailyCollection(date) {
+  const payFilter = paymentDateFilter(null, null, date);
+  const turfRows = await findMany('bookings', payFilter);
+  const gymRows = await findMany('gym_entries', payFilter);
 
   const turf = emptyBucket();
   const online = emptyBucket();
@@ -58,9 +59,10 @@ export function calcDailyCollection(date) {
     addPaymentForDate(row, date, gym);
   }
 
-  const bulkRows = db.prepare(
-    "SELECT * FROM bulk_packages WHERE status = 'CLOSED'"
-  ).all();
+  const bulkRows = await findMany('bulk_packages', {
+    status: 'CLOSED',
+    ...payFilter,
+  });
   for (const row of bulkRows) {
     if (row.category === 'gym') {
       addPaymentForDate(row, date, gym);
@@ -72,7 +74,7 @@ export function calcDailyCollection(date) {
     }
   }
 
-  const fcRows = db.prepare('SELECT * FROM football_coaching').all();
+  const fcRows = await findMany('football_coaching', payFilter);
   for (const row of fcRows) {
     addPaymentForDate(row, date, football_coaching);
   }
