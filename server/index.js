@@ -32,7 +32,10 @@ const isProd = process.env.NODE_ENV === 'production';
 app.use(cors());
 app.use(express.json());
 
-app.get('/api/health', (_req, res) => {
+app.get('/api/health', async (_req, res) => {
+  if (!isMongoReady()) {
+    try { await connectMongo(); } catch { /* reported below */ }
+  }
   res.json({
     ok: true,
     mongo: isMongoReady(),
@@ -75,38 +78,49 @@ if (isProd) {
   });
 }
 
-connectMongo()
-  .then((db) => {
-    if (!db && isProd) {
-      console.error('FATAL: MongoDB required in production but connection failed:', getMongoError());
+async function start() {
+  const db = await connectMongo();
+  if (!db) {
+    console.error('MongoDB connect failed at startup:', getMongoError());
+    if (isProd) {
+      console.error('Retrying Mongo in background…');
+      setInterval(() => {
+        if (!isMongoReady()) {
+          connectMongo().catch(() => {});
+        }
+      }, 15000);
     }
-  })
-  .catch((err) => {
-    console.error('MongoDB background connect failed:', err.message);
+  }
+
+  process.on('unhandledRejection', (reason) => {
+    console.error('Unhandled promise rejection:', reason?.message || reason);
+  });
+  process.on('uncaughtException', (err) => {
+    console.error('Uncaught exception:', err?.message || err);
   });
 
-process.on('unhandledRejection', (reason) => {
-  console.error('Unhandled promise rejection:', reason?.message || reason);
-});
-process.on('uncaughtException', (err) => {
-  console.error('Uncaught exception:', err?.message || err);
-});
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Server running on http://localhost:${PORT}${isProd ? ' (production)' : ''}`);
+    console.log(`MongoDB: ${isMongoReady() ? 'connected' : `NOT connected (${getMongoError()})`}`);
+    if (isProd) {
+      console.log('Owner mobile app:', `http://localhost:${PORT}/owner.html`);
+      console.log('Trainer mobile app:', `http://localhost:${PORT}/trainer`);
+    }
+    if (!isProd) {
+      runBackups()
+        .then((result) => {
+          if (result.daily || result.weekly) {
+            console.log('Backup folder:', 'server/backups/');
+          } else if (!result.skipped) {
+            console.log('Backups up to date for today');
+          }
+        })
+        .catch((err) => console.error('Startup backup failed:', err.message));
+    }
+  });
+}
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server running on http://localhost:${PORT}${isProd ? ' (production)' : ''}`);
-  if (isProd) {
-    console.log('Owner mobile app:', `http://localhost:${PORT}/owner.html`);
-    console.log('Trainer mobile app:', `http://localhost:${PORT}/trainer`);
-  }
-  if (!isProd) {
-    runBackups()
-      .then((result) => {
-        if (result.daily || result.weekly) {
-          console.log('Backup folder:', 'server/backups/');
-        } else if (!result.skipped) {
-          console.log('Backups up to date for today');
-        }
-      })
-      .catch((err) => console.error('Startup backup failed:', err.message));
-  }
+start().catch((err) => {
+  console.error('Failed to start server:', err);
+  process.exit(1);
 });
