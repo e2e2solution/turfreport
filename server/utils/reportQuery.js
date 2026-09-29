@@ -128,11 +128,11 @@ export async function queryReportData({
     if (paymentFilter && onlineMatchDay) {
       // Daily report: show matches by match date (pending visible).
       // Sum still uses Direct GPay + settlements only (calcDailyCollection).
-      online = queryOnlineDailyDisplayRows({ from, to, date: match_date });
+      online = await queryOnlineDailyDisplayRows({ from, to, date: match_date });
     } else if (paymentFilter) {
       online = [
-        ...queryOnlineDirectReceivedRows({ from, to, date: match_date }),
-        ...queryOnlineSettlementRows({ from, to, date: match_date }),
+        ...(await queryOnlineDirectReceivedRows({ from, to, date: match_date })),
+        ...(await queryOnlineSettlementRows({ from, to, date: match_date })),
       ];
     } else {
       const onlineFilter = dateFieldFilter('match_date', from, to, match_date);

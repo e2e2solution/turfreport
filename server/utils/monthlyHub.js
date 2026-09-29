@@ -88,8 +88,8 @@ export async function buildMonthlyHubBreakdown(monthKey) {
   }
 
   const onlineReceipts = [
-    ...queryOnlineDirectReceivedRows({ from: range.from, to: range.to }),
-    ...queryOnlineSettlementRows({ from: range.from, to: range.to }),
+    ...(await queryOnlineDirectReceivedRows({ from: range.from, to: range.to })),
+    ...(await queryOnlineSettlementRows({ from: range.from, to: range.to })),
   ];
   for (const row of onlineReceipts) {
     online.revenue += onlineReceiptInRange(row, range.from, range.to);

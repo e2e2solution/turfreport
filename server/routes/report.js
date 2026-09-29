@@ -8,61 +8,76 @@ import { countGymMembersJoined } from '../utils/gymCount.js';
 const router = Router();
 
 router.get('/daily-total', async (req, res) => {
-  const { date } = req.query;
-  if (!date) return res.status(400).json({ error: 'date is required' });
-  res.json(await calcDailyCollection(date));
+  try {
+    const { date } = req.query;
+    if (!date) return res.status(400).json({ error: 'date is required' });
+    res.json(await calcDailyCollection(date));
+  } catch (err) {
+    console.error('daily-total error:', err);
+    res.status(500).json({ error: err.message || 'Failed to load daily total' });
+  }
 });
 
 router.get('/preview', async (req, res) => {
-  const { from, to, match_date, filter_type, section, include_bulk_pending, online_match_day } = req.query;
-  const data = await queryReportData({
-    from, to, match_date, filter_type, section: section || 'all', include_bulk_pending, online_match_day,
-  });
-  if (data.paymentFilter) {
-    data.gym_members_joined = countGymMembersJoined(data.gym);
+  try {
+    const { from, to, match_date, filter_type, section, include_bulk_pending, online_match_day } = req.query;
+    const data = await queryReportData({
+      from, to, match_date, filter_type, section: section || 'all', include_bulk_pending, online_match_day,
+    });
+    if (data.paymentFilter) {
+      data.gym_members_joined = countGymMembersJoined(data.gym);
+    }
+    res.json(data);
+  } catch (err) {
+    console.error('report preview error:', err);
+    res.status(500).json({ error: err.message || 'Failed to load report' });
   }
-  res.json(data);
 });
 
 router.get('/excel', async (req, res) => {
-  const { from, to, match_date, filter_type, section, include_bulk_pending, online_match_day } = req.query;
-  const { turf, online, gym, football_coaching, paymentFilter } = await queryReportData({
-    from, to, match_date, filter_type, section: section || 'turf_online', include_bulk_pending, online_match_day,
-  });
+  try {
+    const { from, to, match_date, filter_type, section, include_bulk_pending, online_match_day } = req.query;
+    const { turf, online, gym, football_coaching, paymentFilter } = await queryReportData({
+      from, to, match_date, filter_type, section: section || 'turf_online', include_bulk_pending, online_match_day,
+    });
 
-  const workbook = new ExcelJS.Workbook();
-  const sec = section || 'turf_online';
+    const workbook = new ExcelJS.Workbook();
+    const sec = section || 'turf_online';
 
-  if (sec !== 'gym' && (sec === 'turf' || sec === 'turf_online' || sec === 'all')) {
-    buildTurfSheet(workbook.addWorksheet('Turf Match'), turf);
-  }
-  if (sec !== 'gym' && (sec === 'online' || sec === 'turf_online' || sec === 'all')) {
-    buildOnlineSheet(workbook.addWorksheet('Online Booking'), online);
-  }
-  if (sec === 'gym' || sec === 'all') {
-    buildGymSheet(workbook.addWorksheet('Gym'), gym);
-  }
-  if (sec === 'football_coaching' || sec === 'all') {
-    buildFootballCoachingSheet(workbook.addWorksheet('Football Coaching'), football_coaching);
-  }
+    if (sec !== 'gym' && (sec === 'turf' || sec === 'turf_online' || sec === 'all')) {
+      buildTurfSheet(workbook.addWorksheet('Turf Match'), turf);
+    }
+    if (sec !== 'gym' && (sec === 'online' || sec === 'turf_online' || sec === 'all')) {
+      buildOnlineSheet(workbook.addWorksheet('Online Booking'), online);
+    }
+    if (sec === 'gym' || sec === 'all') {
+      buildGymSheet(workbook.addWorksheet('Gym'), gym);
+    }
+    if (sec === 'football_coaching' || sec === 'all') {
+      buildFootballCoachingSheet(workbook.addWorksheet('Football Coaching'), football_coaching);
+    }
 
-  const buffer = await workbook.xlsx.writeBuffer();
-  let filename = 'report.xlsx';
-  if (sec === 'gym') {
-    filename = paymentFilter
-      ? `gym-payment-${match_date || `${from}-${to}`}.xlsx`
-      : match_date ? `gym-report-${match_date}.xlsx` : `gym-report-${from}-${to}.xlsx`;
-  } else if (paymentFilter) {
-    filename = `payment-report-${match_date || `${from}-${to}`}.xlsx`;
-  } else if (match_date) {
-    filename = sec === 'gym' ? `gym-${match_date}.xlsx` : `report-${match_date}.xlsx`;
-  } else if (from && to) {
-    filename = `report-${from}-${to}.xlsx`;
-  }
+    const buffer = await workbook.xlsx.writeBuffer();
+    let filename = 'report.xlsx';
+    if (sec === 'gym') {
+      filename = paymentFilter
+        ? `gym-payment-${match_date || `${from}-${to}`}.xlsx`
+        : match_date ? `gym-report-${match_date}.xlsx` : `gym-report-${from}-${to}.xlsx`;
+    } else if (paymentFilter) {
+      filename = `payment-report-${match_date || `${from}-${to}`}.xlsx`;
+    } else if (match_date) {
+      filename = sec === 'gym' ? `gym-${match_date}.xlsx` : `report-${match_date}.xlsx`;
+    } else if (from && to) {
+      filename = `report-${from}-${to}.xlsx`;
+    }
 
-  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-  res.send(Buffer.from(buffer));
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(Buffer.from(buffer));
+  } catch (err) {
+    console.error('report excel error:', err);
+    res.status(500).json({ error: err.message || 'Failed to generate excel' });
+  }
 });
 
 export default router;

@@ -45,11 +45,11 @@ export async function calcDailyCollection(date) {
     addPaymentForDate(row, date, bucket);
   }
 
-  const onlineDirectRows = queryOnlineDirectReceivedRows({ date });
+  const onlineDirectRows = await queryOnlineDirectReceivedRows({ date });
   for (const row of onlineDirectRows) {
     addPaymentForDate(row, date, online);
   }
-  const onlineSettlementRows = queryOnlineSettlementRows({ date });
+  const onlineSettlementRows = await queryOnlineSettlementRows({ date });
   for (const row of onlineSettlementRows) {
     online.bank += Number(row.received_amount) || 0;
   }
