@@ -22,6 +22,8 @@ import FootballCoachingReport from './pages/FootballCoachingReport';
 import OnlineMatchReport from './pages/OnlineMatchReport';
 import OnlineSettlements from './pages/OnlineSettlements';
 import TurfMatchReport from './pages/TurfMatchReport';
+import MonthlyHubReport from './pages/MonthlyHubReport';
+import GymPendingReport from './pages/GymPendingReport';
 
 function AppRoutes() {
   return (
@@ -41,6 +43,8 @@ function AppRoutes() {
               <Route path="/online-report" element={<OnlineMatchReport />} />
               <Route path="/online-settlements" element={<OnlineSettlements />} />
               <Route path="/turf-report" element={<TurfMatchReport />} />
+              <Route path="/monthly-hub" element={<MonthlyHubReport />} />
+              <Route path="/gym-pending" element={<GymPendingReport />} />
               <Route path="/bulk" element={<BulkList />} />
               <Route path="/bulk/add" element={<AddBulk />} />
               <Route path="/bulk/:id" element={<BulkDetail />} />

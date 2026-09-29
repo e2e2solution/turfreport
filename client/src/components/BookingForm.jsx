@@ -10,6 +10,7 @@ import {
   searchGymNames,
   searchFootballCoachingNames,
   fetchBookings,
+  fetchGymEntries,
 } from '../api';
 
 const STATUSES = ['PENDING', 'CLOSED'];
@@ -357,6 +358,7 @@ export function GymForm({ initial, onSubmit, submitLabel = 'Save', enableNameHis
     advance_gpay: '', advance_cash: '', advance_date: '',
     balance_gpay: '', balance_cash: '', balance_date: '',
     status: 'PENDING', remarks: '',
+    link_gym_id: '',
   };
   const merged = { ...empty, ...initial };
   if (initial?.gym_date && !initial.start_date) {
@@ -368,7 +370,26 @@ export function GymForm({ initial, onSubmit, submitLabel = 'Save', enableNameHis
   const [form, setForm] = useState(merged);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [linkOptions, setLinkOptions] = useState([]);
   const searchNames = useCallback((q) => searchGymNames(q), []);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchGymEntries()
+      .then((rows) => {
+        if (cancelled) return;
+        const list = (rows || []).filter((r) => !initial?.id || r.id !== initial.id);
+        setLinkOptions(list);
+        if (initial?.link_group_id && !form.link_gym_id) {
+          const partner = list.find((r) => r.link_group_id === initial.link_group_id);
+          if (partner) setForm((f) => ({ ...f, link_gym_id: String(partner.id) }));
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setLinkOptions([]);
+      });
+    return () => { cancelled = true; };
+  }, [initial?.id, initial?.link_group_id]);
 
   useEffect(() => {
     if (form.start_date && form.plan_months) {
@@ -421,6 +442,23 @@ export function GymForm({ initial, onSubmit, submitLabel = 'Save', enableNameHis
         <p className="hint">End date is the last day of the {planLabel(form.plan_months)} period.</p>
         <label>Total Amount *<input type="number" value={form.total} onChange={(e) => set('total', e.target.value)} required min="0" /></label>
         <label>Personal Training Amount<input type="number" value={form.personal_training_amount} onChange={(e) => set('personal_training_amount', e.target.value)} min="0" placeholder="0" /></label>
+        <label>
+          Link previous package
+          <select value={form.link_gym_id || ''} onChange={(e) => set('link_gym_id', e.target.value)}>
+            <option value="">— None —</option>
+            {linkOptions.map((r) => (
+              <option key={r.id} value={r.id}>
+                #{r.id} · {r.name} · {planLabel(r.plan_months)} · {r.start_date}
+                {r.status === 'PENDING' ? ' · pending' : ''}
+              </option>
+            ))}
+          </select>
+        </label>
+        <p className="hint">
+          If today’s payment includes an old balance plus this month’s fee (example: June 3-month balance ₹2000 + this month 1-month = ₹3000),
+          put ₹2000 as balance on the old record with today’s date, put this month’s fee on this record with today’s date, then link them.
+          Daily report shows both. This month’s 1-month list also shows the linked old balance.
+        </p>
       </div>
       <PaymentSection title="Advance Paid (optional)" className="advance" gpayField="advance_gpay" cashField="advance_cash" dateField="advance_date" form={form} set={set} />
       <PaymentSection title="Balance Paid" className="balance" gpayField="balance_gpay" cashField="balance_cash" dateField="balance_date" form={form} set={set} />

@@ -210,7 +210,7 @@ export default function Home() {
         </button>
         <Link to="/cafe" className="action-card cafe-action-card">
           <span className="action-icon">☕</span>
-          <span>Cafe Analysis — Upload CSV</span>
+          <span>Cafe Analysis — MoM Compare &amp; Download</span>
         </Link>
         <Link to="/pt" className="action-card">
           <span className="action-icon">🏋️</span>
@@ -231,6 +231,14 @@ export default function Home() {
         <Link to="/turf-report" className="action-card">
           <span className="action-icon">🏟️</span>
           <span>Turf Match — Month Report</span>
+        </Link>
+        <Link to="/monthly-hub" className="action-card">
+          <span className="action-icon">📅</span>
+          <span>Monthly Hours &amp; Revenue</span>
+        </Link>
+        <Link to="/gym-pending" className="action-card">
+          <span className="action-icon">🧾</span>
+          <span>Gym Pending — Month Report</span>
         </Link>
         <Link to="/bookings" className="action-card">
           <span className="action-icon">📋</span>

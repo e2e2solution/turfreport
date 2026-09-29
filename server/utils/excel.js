@@ -267,6 +267,15 @@ export function buildGymSheet(sheet, rows) {
     r.total, r.personal_training_amount || '',
     r.advance_gpay || '', r.advance_cash || '', formatDateDMY(r.advance_date),
     r.balance_gpay || '', r.balance_cash || '', formatDateDMY(r.balance_date),
-    r.status, r.remarks || '',
+    r.status, [r.link_note, r.remarks].filter(Boolean).join(' · '),
   ], 14);
+
+  const ptRowFill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFF00' } };
+  rows.forEach((r, idx) => {
+    if (!(Number(r.personal_training_amount) > 0)) return;
+    const row = sheet.getRow(3 + idx);
+    for (let c = 1; c <= 14; c++) {
+      row.getCell(c).fill = ptRowFill;
+    }
+  });
 }

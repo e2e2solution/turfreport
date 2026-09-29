@@ -169,6 +169,29 @@ export async function searchGymNames(q) {
   return request(`${API_GYM}/name-search?${qs}`);
 }
 
+export async function fetchGymPendingReport(month) {
+  return request(`${API_GYM}/pending-report?month=${encodeURIComponent(month)}`);
+}
+
+export async function downloadGymExcel(params = {}) {
+  const qs = new URLSearchParams(params).toString();
+  const token = getToken();
+  const res = await fetch(`${API_GYM}/excel${qs ? `?${qs}` : ''}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || 'Failed to download gym Excel');
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = res.headers.get('Content-Disposition')?.match(/filename="(.+)"/)?.[1] || 'gym.xlsx';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export async function fetchFootballCoachingEntries(params = {}) {
   const qs = new URLSearchParams(params).toString();
   return request(`${API_FOOTBALL_COACHING}${qs ? `?${qs}` : ''}`);
@@ -275,6 +298,10 @@ export async function fetchDailyTotal(date) {
 
 export async function fetchSummary(period, date) {
   return request(`${API_SUMMARY}?period=${period}&date=${date}`);
+}
+
+export async function fetchMonthlyHub(month) {
+  return request(`${API_SUMMARY}/monthly-hub?month=${encodeURIComponent(month)}`);
 }
 
 export async function downloadReport(params = {}) {
@@ -389,6 +416,30 @@ export async function fetchCafeMonths() {
 
 export async function fetchCafeReport(month) {
   return request(`${API_CAFE}/report?month=${encodeURIComponent(month)}`);
+}
+
+export async function fetchCafeCompare(month) {
+  return request(`${API_CAFE}/compare?month=${encodeURIComponent(month)}`);
+}
+
+export async function downloadCafeCsv(month, type = 'results') {
+  const qs = new URLSearchParams({ month, type });
+  const token = getToken();
+  const res = await fetch(`${API_CAFE}/download?${qs}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || 'Failed to download cafe CSV');
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = res.headers.get('Content-Disposition')?.match(/filename="(.+)"/)?.[1]
+    || (type === 'compare' ? `Cafe_Compare_${month}.csv` : `Cafe_Results_${month}.csv`);
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 export async function uploadCafeReport(csv, filename) {

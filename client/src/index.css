@@ -545,19 +545,68 @@ textarea:focus {
 
 .filter-bar {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-end;
   gap: 10px;
   margin-bottom: 16px;
 }
 
 .filter-bar label {
-  flex: 1;
+  flex: 1 1 140px;
+  min-width: 0;
   margin-bottom: 0;
+}
+
+.filter-bar .filter-name {
+  flex: 1 1 100%;
+}
+
+.filter-bar input,
+.filter-bar select {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.filter-bar .btn {
+  flex: 0 0 auto;
+  align-self: flex-end;
+  white-space: nowrap;
 }
 
 .filter-hint {
   margin: -8px 0 16px;
   font-size: 0.85rem;
+}
+
+@media (max-width: 600px) {
+  .filter-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .filter-bar label,
+  .filter-bar .filter-name {
+    flex: none;
+    width: 100%;
+  }
+
+  .filter-bar .btn {
+    width: 100%;
+    align-self: stretch;
+  }
+
+  .card-title-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .card-title-row .btn {
+    width: 100%;
+    text-align: center;
+  }
 }
 
 .booking-list {
@@ -2814,6 +2863,238 @@ textarea:focus {
 
 .cafe-upload-btn input {
   display: none;
+}
+
+.cafe-action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem 0.85rem;
+  align-items: center;
+  margin-top: 0.75rem;
+}
+
+.checkbox-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+.mom-card h4 {
+  margin: 1rem 0 0.5rem;
+}
+
+.cafe-mom-image-header h3 {
+  margin: 0 0 0.25rem;
+}
+
+.cafe-mom-image-header .hint {
+  margin: 0 0 0.75rem;
+}
+
+.cafe-section-capture {
+  margin-top: 1rem;
+}
+
+.cafe-section-title {
+  margin-bottom: 0.35rem;
+}
+
+.cafe-section-title h4 {
+  margin: 0;
+}
+
+.cafe-section-title .cafe-mom-image-header {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Full table width while capturing — avoids narrow/cropped phone screenshots */
+.cafe-section-export {
+  min-width: 920px !important;
+  width: 920px !important;
+  max-width: none !important;
+  overflow: visible !important;
+  background: #fff;
+  padding: 16px;
+  box-sizing: border-box;
+}
+
+.cafe-section-export .table-wrap {
+  overflow: visible !important;
+  margin-top: 8px;
+}
+
+.cafe-section-export .report-table {
+  min-width: 900px;
+  width: 100%;
+}
+
+.cafe-section-export .report-table th {
+  position: static;
+}
+
+.cafe-section-export .insight-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.cafe-section-export .stat-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+/* Gym filtered report image — full table width, off-screen capture */
+.gym-filter-report-export {
+  width: 1100px;
+  max-width: none;
+  background: #fff;
+  padding: 20px 24px;
+  box-sizing: border-box;
+  overflow: visible;
+}
+
+.gym-filter-report-export .table-wrap {
+  overflow: visible;
+  margin-top: 12px;
+}
+
+.gym-filter-report-export .report-table {
+  min-width: 100%;
+  width: 100%;
+  table-layout: auto;
+}
+
+.gym-filter-report-export .report-table th {
+  position: static;
+}
+
+.gym-filter-report-export .report-table tr.pt-client-row td {
+  background: #fff176;
+}
+
+.gym-report-analysis {
+  margin-top: 20px;
+  padding: 14px 16px;
+  border: 1px solid #d0d7de;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.gym-report-analysis h3 {
+  margin: 0 0 10px;
+  font-size: 1rem;
+  color: #334155;
+  border-left: 4px solid #4472c4;
+  padding-left: 8px;
+}
+
+.gym-analysis-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.gym-analysis-item {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.gym-analysis-item span {
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
+.gym-analysis-item strong {
+  font-size: 1.15rem;
+  color: #0f172a;
+}
+
+.gym-analysis-list {
+  margin: 0;
+  padding-left: 1.15rem;
+}
+
+.gym-analysis-list li {
+  margin-bottom: 0.35rem;
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+@media (max-width: 600px) {
+  .gym-analysis-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.insight-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.85rem;
+  margin: 1rem 0;
+}
+
+.insight-block {
+  border: 1px solid #d0d7de;
+  border-radius: 8px;
+  padding: 0.75rem 0.9rem;
+  background: #f8fafc;
+}
+
+.insight-block h4 {
+  margin: 0 0 0.4rem;
+  font-size: 0.95rem;
+}
+
+.insight-block ul {
+  margin: 0;
+  padding-left: 1.1rem;
+}
+
+.insight-block li {
+  margin-bottom: 0.35rem;
+  font-size: 0.88rem;
+  line-height: 1.35;
+}
+
+.insight-positive {
+  border-color: #86efac;
+  background: #f0fdf4;
+}
+
+.insight-drawback {
+  border-color: #fca5a5;
+  background: #fef2f2;
+}
+
+.insight-improve {
+  border-color: #93c5fd;
+  background: #eff6ff;
+}
+
+.mom-up {
+  color: #15803d;
+  font-weight: 600;
+}
+
+.mom-down {
+  color: #b91c1c;
+  font-weight: 600;
+}
+
+.mom-flat {
+  color: #64748b;
+  font-weight: 600;
+}
+
+.monthly-hub-total-row td {
+  background: #e8eef7;
+  font-weight: 600;
 }
 
 .owner-bottom-nav {

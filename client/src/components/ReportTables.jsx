@@ -320,7 +320,17 @@ export function GymTable({ rows, onDeleteBulk, onEditBulk }) {
         <tbody>
           {rows.map((r) => (
             <tr key={r.id} className={bulkRowClass(r)}>
-              <td>{r.name}{r.is_bulk ? ` (#${r.bulk_id})` : ''}</td>
+              <td>
+                {r.name}{r.is_bulk ? ` (#${r.bulk_id})` : ''}
+                {r.is_linked_booking && (
+                  <>
+                    {' '}
+                    <span className="badge linked" title={r.link_note || 'Linked gym payment'}>
+                      {r.is_linked_carryover ? 'Linked previous' : 'Linked'}
+                    </span>
+                  </>
+                )}
+              </td>
               <td>{planLabel(r.plan_months)}</td>
               <td>{r.is_bulk_payment ? '—' : formatDateDMY(r.start_date)}</td>
               <td>{r.is_bulk_payment ? '—' : formatDateDMY(r.end_date)}</td>
@@ -336,7 +346,7 @@ export function GymTable({ rows, onDeleteBulk, onEditBulk }) {
               <td>{isPendingBulk(r)
                 ? <span className="badge pending">Pending Bulk</span>
                 : <StatusBadge status={r.status} />}</td>
-              <td className={r.is_bulk ? 'remarks-cell' : ''}>{r.remarks || '-'}</td>
+              <td className={r.is_bulk ? 'remarks-cell' : ''}>{[r.link_note, r.remarks].filter(Boolean).join(' · ') || '-'}</td>
               {showActions && (
                 <td className="bulk-actions-cell">
                   {canEditBulkSession(r) && onEditBulk && (
